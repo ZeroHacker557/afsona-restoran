@@ -50,7 +50,9 @@ STATUS_EMOJI = {
 
 def main_kb(is_admin: bool = False):
     rows = [
-        [KeyboardButton(text="🛍 Katalogni ochish", web_app=WebAppInfo(url=MINI_APP_URL))],
+        # Oddiy tugma — bosilganda pastdagi menyu tugmasiga yo'naltiradi.
+        # Mini app faqat yozuv maydoni yonidagi "🛍 Katalog" orqali ochiladi.
+        [KeyboardButton(text="🛍 Katalogni ochish")],
         [KeyboardButton(text="📦 Buyurtmalarim")],
         [KeyboardButton(text="📞 Biz bilan aloqa"), KeyboardButton(text="ℹ️ Yordam")]
     ]
@@ -801,6 +803,26 @@ async def handle_admin_btn(message: Message, state: FSMContext):
     await cmd_admin(message, state)
 
 
+@dp.message(F.text == "🛍 Katalogni ochish")
+async def handle_open_catalog(message: Message):
+    """
+    Katalog tugmasi bosilganda mini appni qayerdan ochishni ko'rsatadi.
+    Tugmaning o'ziga web_app biriktirilmagan — do'kon yozuv maydoni
+    yonidagi doimiy menyu tugmasi orqali ochiladi.
+    """
+    text = "🛍 <b>KATALOG</b>\n"
+    text += "━" * 22 + "\n\n"
+    text += "Do'konimiz Telegram ilovasi ichida ochiladi.\n\n"
+    text += "👇 Pastda, <b>yozuv maydonining chap tomonida</b>\n"
+    text += "   <b>«🛍 Katalog»</b> tugmasi turibdi.\n\n"
+    text += "Shu tugmani bosing — do'kon shu yerning o'zida ochiladi.\n\n"
+    text += "━" * 22 + "\n"
+    text += "✨ <i>Mahsulotlarni ko'ring, savatga qo'shing va\n"
+    text += "bir necha bosishda buyurtma bering.</i>"
+
+    await message.answer(text)
+
+
 @dp.message(F.text == "📞 Biz bilan aloqa")
 async def cmd_contact(message: Message):
     await message.answer(
@@ -817,7 +839,8 @@ async def cmd_contact(message: Message):
 async def cmd_help(message: Message):
     await message.answer(
         "ℹ️ <b>Botdan qanday foydalanish mumkin?</b>\n\n"
-        "1️⃣ <b>Katalogni ochish</b> tugmasini bosib, mahsulotlar bilan tanishing.\n"
+        "1️⃣ Yozuv maydoni yonidagi <b>«🛍 Katalog»</b> tugmasini bosib, "
+        "mahsulotlar bilan tanishing.\n"
         "2️⃣ O'zingizga yoqqan mahsulotlarni <b>Savatga</b> qo'shing.\n"
         "3️⃣ Buyurtmani rasmiylashtirishda <b>Naqd</b> yoki <b>Karta</b> orqali to'lov usulini tanlang.\n"
         "4️⃣ Agar karta orqali to'lov qilsangiz, to'lov chekini botga yuboring.\n"
