@@ -1,21 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { formatPrice } from '../data'
 import { subscribeToCategories, subscribeToProducts, sendOrderToFirestore, saveUserToFirestore, subscribeToUserOrders, subscribeToUserProfile, subscribeToUserNotifications, markNotificationsAsRead } from '../lib/firebase'
-import type { AppPage, Category, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
-import { hapticFeedback, hapticSuccess, initTelegram, getTelegramUser } from '../utils/telegram'
+import type { AppPage, Category, NewOrder, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
+import { hapticError, hapticFeedback, hapticSuccess, initTelegram, getTelegramUser } from '../utils/telegram'
 
-const ORDERS_KEY = 'shopOnlineOrders'
 const LIKES_KEY = 'shopOnlineLikes'
+const CART_KEY = 'shopOnlineCart'
 
-function loadOrders(): Order[] {
-  try {
-    return JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]')
-  } catch { return [] }
-}
-
-function saveOrders(orders: Order[]) {
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders))
-}
+type CartItems = Record<string, { quantity: number; size?: string; color?: string }>
 
 function loadLikes(): number[] {
   try {
@@ -27,20 +18,30 @@ function saveLikes(ids: number[]) {
   localStorage.setItem(LIKES_KEY, JSON.stringify(ids))
 }
 
+/** Savat saqlanadi: Telegram mini app'ni yopib-ochganda yo'qolmasligi uchun (F-14). */
+function loadCart(): CartItems {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CART_KEY) || '{}')
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+    return raw as CartItems
+  } catch { return {} }
+}
+
 export function useShopStore() {
   const [page, setPage] = useState<AppPage>('home')
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [likedIds, setLikedIds] = useState<number[]>(loadLikes)
-  const [cartItems, setCartItems] = useState<Record<string, { quantity: number; size?: string; color?: string }>>({})
+  const [cartItems, setCartItems] = useState<CartItems>(loadCart)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isSearchOpen, setSearchOpen] = useState(false)
   const [isCartOpen, setCartOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<string | null>(null)
-  const [myOrders, setMyOrders] = useState<Order[]>(loadOrders)
+  const [myOrders, setMyOrders] = useState<Order[]>([])
   const [checkoutDone, setCheckoutDone] = useState(false)
+  const [isSubmitting, setSubmitting] = useState(false)
   const [orderForm, setOrderForm] = useState<OrderForm>({
     name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd',
   })
@@ -102,6 +103,15 @@ export function useShopStore() {
       if (unsubNotifications) unsubNotifications()
     }
   }, [])
+
+  // Savat har o'zgarganda saqlanadi (F-14)
+  useEffect(() => {
+    try {
+      localStorage.setItem(CART_KEY, JSON.stringify(cartItems))
+    } catch (error) {
+      console.warn("[Savat] saqlab bo'lmadi:", error)
+    }
+  }, [cartItems])
 
   const cartCount = Object.values(cartItems).reduce((total, item) => total + item.quantity, 0)
 
@@ -201,34 +211,44 @@ export function useShopStore() {
   }, [])
 
   const submitOrder = useCallback(async (finalTotal: number) => {
-    if (!orderForm.name || !orderForm.phone || !orderForm.address) {
-      notify('Iltimos, barcha maydonlarni to\'ldiring')
+    if (isSubmitting) return false
+
+    if (!orderForm.name.trim() || !orderForm.phone.trim() || !orderForm.address.trim()) {
+      notify("Iltimos, barcha maydonlarni to'ldiring")
       return false
     }
 
-    const now = new Date()
-    const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek']
-    const dateStr = `${now.getDate()} ${months[now.getMonth()]}, ${now.getFullYear()} • ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    
+    if (cartProducts.length === 0) {
+      notify("Savatingiz bo'sh")
+      return false
+    }
+
     const tgUser = getTelegramUser()
 
-    const newOrder: Order = {
-      id: `#${Date.now().toString().slice(-7)}`,
-      date: dateStr,
+    const newOrder: NewOrder = {
       products: cartProducts,
-      total: finalTotal,
+      total: Math.round(finalTotal),
       status: 'Yangi',
       paymentMethod: orderForm.paymentMethod,
       paymentStatus: orderForm.paymentMethod === 'Karta' ? 'Kutilmoqda' : undefined,
       customer: { ...orderForm },
       userId: tgUser?.id,
-      username: tgUser?.username || tgUser?.first_name,
+      username: tgUser?.username,
     }
 
-    // Send to Firestore
-    await sendOrderToFirestore(newOrder)
+    setSubmitting(true)
+    try {
+      await sendOrderToFirestore(newOrder)
+    } catch (error) {
+      // Buyurtma saqlanmadi — savat SAQLANIB qoladi (F-05)
+      console.error('[Buyurtma] yuborilmadi:', error)
+      hapticError()
+      notify("Buyurtma yuborilmadi. Internetni tekshirib, qayta urinib ko'ring")
+      return false
+    } finally {
+      setSubmitting(false)
+    }
 
-    // Reset
     setCartItems({})
     setOrderForm({ name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd' })
     setCheckoutDone(true)
@@ -237,14 +257,14 @@ export function useShopStore() {
     setTimeout(() => setCheckoutDone(false), 4000)
 
     return true
-  }, [orderForm, cartProducts, cartTotal, notify])
+  }, [isSubmitting, orderForm, cartProducts, notify])
 
   return {
     page, products, categories, loading,
     cartItems, cartCount, cartTotal, cartProducts,
     likedIds, selectedProduct,
     isSearchOpen, isCartOpen, query, searchResults, toast,
-    myOrders, checkoutDone, orderForm, userProfile,
+    myOrders, checkoutDone, isSubmitting, orderForm, userProfile,
     notifications, unreadNotificationsCount,
     navigate, openProduct, toggleLike,
     setSearchOpen, setQuery,
@@ -252,6 +272,5 @@ export function useShopStore() {
     openCart, closeCart, goToCheckout,
     updateOrderForm, submitOrder,
     notify, clearToast: () => setToast(null),
-    refreshData: () => {},
   }
 }

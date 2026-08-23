@@ -1,17 +1,16 @@
-import { useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, Check, MapPin, MessageSquare, Phone, Send, ShoppingBag, User, CreditCard, Banknote, Tag, Loader2 } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl, hapticFeedback } from '../utils/telegram'
-import { db } from '../lib/firebase'
+import { db, getPaymentSettings } from '../lib/firebase'
 import { collection, query, where, getDocs } from 'firebase/firestore'
-import type { OrderForm, Product, PromoCode } from '../types/domain'
+import type { OrderForm, PaymentSettings, Product, PromoCode } from '../types/domain'
 import L from 'leaflet'
 
 // Fix Leaflet default icon issue
 import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
-let DefaultIcon = L.icon({
+const DefaultIcon = L.icon({
   iconUrl: icon,
   shadowUrl: iconShadow,
   iconSize: [25, 41],
@@ -26,17 +25,28 @@ type Props = {
   orderForm: OrderForm
   onUpdateForm: (field: keyof OrderForm, value: any) => void
   onSubmit: (finalTotal: number) => Promise<boolean>
+  isSubmitting: boolean
   onBack: () => void
   onNavigate: (page: import('../types/domain').AppPage) => void
 }
 
-export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUpdateForm, onSubmit, onBack, onNavigate }: Props) {
+export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUpdateForm, onSubmit, isSubmitting, onBack, onNavigate }: Props) {
   const [copied, setCopied] = useState(false)
   const [promoInput, setPromoInput] = useState('')
   const [promoLoading, setPromoLoading] = useState(false)
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null)
   const [promoError, setPromoError] = useState('')
+  const [payment, setPayment] = useState<PaymentSettings | null>(null)
   const addresses = profile?.addresses || []
+
+  // Karta ma'lumoti yagona manbadan — settings/payment (F-07)
+  useEffect(() => {
+    let alive = true
+    getPaymentSettings().then((settings) => {
+      if (alive) setPayment(settings)
+    })
+    return () => { alive = false }
+  }, [])
 
   const finalTotal = appliedPromo ? cartTotal * (1 - appliedPromo.discountPercent / 100) : cartTotal
 
@@ -71,17 +81,19 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
         setPromoError('')
         onUpdateForm('promoCode', promoData.code) // Custom logic to save promo code if needed
       }
-    } catch (e) {
+    } catch {
       setPromoError('Xatolik yuz berdi')
     }
     setPromoLoading(false)
   }
 
   const handleSubmit = async () => {
+    if (isSubmitting) return
     await onSubmit(finalTotal)
   }
 
-  const isValid = orderForm.name.trim() && orderForm.phone.trim() && orderForm.address.trim()
+  const isValid = Boolean(orderForm.name.trim() && orderForm.phone.trim() && orderForm.address.trim())
+  const canSubmit = isValid && !isSubmitting
 
   return (
     <>
@@ -336,14 +348,22 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
               <p className="mb-3 text-sm font-bold" style={{ color: '#7c3aed' }}>💳 Karta ma'lumotlari:</p>
 
               <div className="flex items-center justify-between rounded-xl px-3 py-2" style={{ background: '#fff', border: '1px solid #e2e8f0' }}>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs" style={{ color: '#64748b' }}>Karta raqami</p>
-                  <p className="font-mono text-sm font-bold" style={{ color: '#111426' }}>5614 6818 1872 7921</p>
+                  {payment ? (
+                    <>
+                      <p className="font-mono text-sm font-bold" style={{ color: '#111426' }}>{payment.cardNumber}</p>
+                      <p className="mt-0.5 truncate text-xs font-bold" style={{ color: '#64748b' }}>{payment.cardOwner}</p>
+                    </>
+                  ) : (
+                    <p className="mt-1 h-4 w-40 animate-pulse rounded" style={{ background: '#e2e8f0' }} />
+                  )}
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleCopy('5614 6818 1872 7921')}
-                  className="grid size-9 place-items-center rounded-xl transition active:scale-90"
+                  disabled={!payment?.cardNumber}
+                  onClick={() => payment && handleCopy(payment.cardNumber)}
+                  className="grid size-9 shrink-0 place-items-center rounded-xl transition active:scale-90 disabled:opacity-40"
                   style={{ background: copied ? '#dcfce7' : '#f1f5f9', color: copied ? '#16a34a' : '#7c3aed' }}
                 >
                   {copied ? <Check size={18} /> : <Copy size={18} />}
@@ -365,16 +385,25 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={!isValid}
+          disabled={!canSubmit}
           className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl py-4 font-bold shadow-lg transition hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 disabled:hover:translate-y-0"
           style={{
-            background: isValid ? 'linear-gradient(135deg, #6d28d9, #7c3aed)' : '#d1d5db',
+            background: canSubmit ? 'linear-gradient(135deg, #6d28d9, #7c3aed)' : '#d1d5db',
             color: '#fff',
-            boxShadow: isValid ? '0 8px 24px rgba(109, 40, 217, 0.25)' : 'none',
+            boxShadow: canSubmit ? '0 8px 24px rgba(109, 40, 217, 0.25)' : 'none',
           }}
         >
-          <Send size={20} />
-          Buyurtma berish
+          {isSubmitting ? (
+            <>
+              <Loader2 size={20} className="animate-spin" />
+              Yuborilmoqda...
+            </>
+          ) : (
+            <>
+              <Send size={20} />
+              Buyurtma berish
+            </>
+          )}
         </button>
 
         <p className="mt-3 text-center text-xs" style={{ color: '#94a3b8' }}>

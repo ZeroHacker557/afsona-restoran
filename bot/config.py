@@ -8,6 +8,8 @@ API_PORT     = 8080
 IMAGES_DIR   = "images"
 DB_FILE      = "database.json"
 
-# To'lov sozlamalari
+# To'lov sozlamalari — faqat BOSHLANG'ICH qiymat.
+# Bot birinchi ishga tushganda bular Firestore'dagi settings/payment
+# hujjatiga ko'chiriladi. Undan keyin haqiqiy manba — o'sha hujjat (F-07).
 CARD_NUMBER = "5614 6818 1872 7921"
-CARD_OWNER  = "Ism Familiya"   # <-- ismingizni kiriting
+CARD_OWNER  = "Abubakir Abdulbositov"

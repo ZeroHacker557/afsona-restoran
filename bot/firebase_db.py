@@ -4,8 +4,12 @@ Firebase Firestore & Storage Integration for Python Telegram Bot
 import os
 import uuid
 import urllib.parse
+from datetime import datetime, timezone
+
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
+
+from config import CARD_NUMBER, CARD_OWNER
 
 KEY_FILENAME = "ecommercytest-firebase-adminsdk-fbsvc-645304f3a0.json"
 
@@ -155,17 +159,34 @@ def delete_category(cat_id: str | int):
 
 
 # ─── Orders ───────────────────────────────────────────────
+#
+# Buyurtmaning yagona kaliti — Firestore hujjat id'si. Ilgari "id" maydonidagi
+# "#1234567" ishlatilgan edi, u har ~2.8 soatda takrorlanib, noto'g'ri
+# buyurtma yangilanishiga olib kelardi. Eski yozuvlar buzilmasligi uchun
+# quyidagi funksiyalar avval hujjat id'sini, topilmasa "id" maydonini qidiradi.
+
+
+def _order_ref(order_id: str):
+    """Hujjat havolasini qaytaradi: avval doc.id, keyin eski 'id' maydoni."""
+    ref = db.collection("orders").document(str(order_id))
+    if ref.get().exists:
+        return ref
+
+    docs = db.collection("orders").where("id", "==", str(order_id)).limit(1).get()
+    for doc in docs:
+        return doc.reference
+    return None
+
 
 def update_order_status(order_id: str, new_status: str):
     try:
-        # Check if it's the custom string ID like #1234567 or the document ID
-        # Search by 'id' field
-        docs = db.collection("orders").where("id", "==", order_id).get()
-        for doc in docs:
-            doc.reference.update({"status": new_status})
-            print(f"[OK] Order {order_id} status updated to {new_status}")
-            return True
-        return False
+        ref = _order_ref(order_id)
+        if ref is None:
+            print(f"[ERR] Order {order_id} topilmadi")
+            return False
+        ref.update({"status": new_status})
+        print(f"[OK] Order {order_id} status updated to {new_status}")
+        return True
     except Exception as e:
         print(f"[ERR] Failed to update order status: {e}")
         return False
@@ -174,29 +195,94 @@ def update_order_status(order_id: str, new_status: str):
 def update_payment_status(order_id: str, payment_status: str):
     """To'lov statusini yangilash"""
     try:
-        docs = db.collection("orders").where("id", "==", order_id).get()
-        for doc in docs:
-            doc.reference.update({"paymentStatus": payment_status})
-            print(f"[OK] Order {order_id} payment status updated to {payment_status}")
-            return True
-        return False
+        ref = _order_ref(order_id)
+        if ref is None:
+            print(f"[ERR] Order {order_id} topilmadi")
+            return False
+        ref.update({"paymentStatus": payment_status})
+        print(f"[OK] Order {order_id} payment status updated to {payment_status}")
+        return True
     except Exception as e:
         print(f"[ERR] Failed to update payment status: {e}")
         return False
 
 
 def get_order_by_id(order_id: str):
-    """order_id maydoni bo'yicha buyurtmani olish"""
+    """Buyurtmani hujjat id'si (yoki eski 'id' maydoni) bo'yicha olish"""
     try:
-        docs = db.collection("orders").where("id", "==", order_id).get()
-        for doc in docs:
-            d = doc.to_dict()
-            d["_doc_id"] = doc.id
-            return d
-        return None
+        ref = _order_ref(order_id)
+        if ref is None:
+            return None
+        snap = ref.get()
+        if not snap.exists:
+            return None
+        d = snap.to_dict()
+        d["_doc_id"] = snap.id
+        return d
     except Exception as e:
         print(f"[ERR] get_order_by_id: {e}")
         return None
+
+
+def order_display_id(order: dict) -> str:
+    """Foydalanuvchiga ko'rsatiladigan raqam (eski yozuvlarda 'id' maydoni)."""
+    return order.get("orderNumber") or order.get("id") or "—"
+
+
+_MONTHS_UZ = ["yan", "fev", "mar", "apr", "may", "iyun",
+              "iyul", "avg", "sen", "okt", "noy", "dek"]
+
+
+def order_date_text(order: dict) -> str:
+    """
+    Buyurtma sanasi. Yangi yozuvlarda createdAt (ISO, UTC) bor —
+    uni o'qiladigan ko'rinishga aylantiramiz. Eski yozuvlarda
+    formatlangan 'date' matni saqlanib qolgan (F-10).
+    """
+    created = order.get("createdAt")
+    if created:
+        try:
+            dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            dt = dt.astimezone()
+            return f"{dt.day} {_MONTHS_UZ[dt.month - 1]}, {dt.year} • {dt:%H:%M}"
+        except (ValueError, TypeError):
+            pass
+    return order.get("date") or "—"
+
+
+def claim_order_notification(doc_id: str) -> bool:
+    """
+    Buyurtmani 'adminga yuborilgan' deb belgilaydi.
+    Transaction ichida atomik: True qaytsa — xabar yuborish shu chaqiruv
+    zimmasida, aks holda boshqa birov allaqachon yuborgan.
+    """
+    ref = db.collection("orders").document(doc_id)
+
+    @firestore.transactional
+    def _claim(transaction):
+        snap = ref.get(transaction=transaction)
+        if not snap.exists:
+            return False
+        # Faqat aniq False bo'lganini olamiz. Eski buyurtmalarda bu maydon
+        # umuman yo'q — ular qayta yuborilmasligi kerak.
+        if snap.to_dict().get("notified") is not False:
+            return False
+        transaction.update(ref, {"notified": True})
+        return True
+
+    try:
+        return _claim(db.transaction())
+    except Exception as e:
+        print(f"[ERR] claim_order_notification: {e}")
+        return False
+
+
+def release_order_notification(doc_id: str):
+    """Xabar yuborilmasa bayroqni qaytaramiz — keyingi urinishda qayta yuboriladi."""
+    try:
+        db.collection("orders").document(doc_id).update({"notified": False})
+    except Exception as e:
+        print(f"[ERR] release_order_notification: {e}")
 
 
 def get_user_orders(user_id: int):
@@ -217,34 +303,36 @@ def get_user_orders(user_id: int):
 
 def listen_to_new_orders(callback):
     """
-    Listens for new orders in Firestore and triggers the callback.
-    callback function should accept one argument: order_data (dict)
+    Yangi buyurtmalarni kuzatadi va callback'ni chaqiradi.
+
+    Vaqt oynasiga tayanmaydi: har bir buyurtmada `notified` bayrog'i bor.
+    Shu sababli bot qancha vaqt o'chib turgan bo'lsa ham, ishga tushganda
+    yuborilmagan buyurtmalarni yetkazadi (F-21). Eski, `notified` maydoni
+    yo'q buyurtmalar esa qayta yuborilmaydi.
+
+    callback(order_data) — yuborish muvaffaqiyatsiz bo'lsa
+    release_order_notification(doc_id) chaqirilishi kerak.
     """
-    import threading
 
     def on_snapshot(col_snapshot, changes, read_time):
         for change in changes:
-            if change.type.name == 'ADDED':
-                order_data = change.document.to_dict()
-                order_data['_doc_id'] = change.document.id
-                
-                # Check if this is a newly created order (within the last few minutes)
-                # We skip old orders to avoid spamming on bot restart
-                from datetime import datetime, timezone
-                
-                try:
-                    if 'createdAt' in order_data:
-                        # Replace Z with +00:00 for Python 3.10 compatibility
-                        time_str = order_data['createdAt'].replace('Z', '+00:00')
-                        created_dt = datetime.fromisoformat(time_str)
-                        now = datetime.now(timezone.utc)
-                        diff = (now - created_dt).total_seconds()
-                        if diff < 120: # 2 minutes
-                            callback(order_data)
-                except Exception as e:
-                    print(f"Error parsing order date: {e}")
+            if change.type.name != 'ADDED':
+                continue
 
-    # Watch the collection
+            order_data = change.document.to_dict() or {}
+            if order_data.get("notified") is not False:
+                continue
+
+            if not claim_order_notification(change.document.id):
+                continue
+
+            order_data['_doc_id'] = change.document.id
+            try:
+                callback(order_data)
+            except Exception as e:
+                print(f"[ERR] Buyurtma callback xatosi: {e}")
+                release_order_notification(change.document.id)
+
     orders_watch = db.collection("orders").on_snapshot(on_snapshot)
     return orders_watch
 
@@ -286,13 +374,44 @@ def delete_promocode(code_id: str):
 # ─── Notifications ────────────────────────────────────────────
 
 def send_notification(user_id: int, title: str, body: str, type: str = 'system'):
-    from datetime import datetime
     doc_ref = db.collection("notifications").document()
     doc_ref.set({
         "userId": user_id,
         "title": title,
         "body": body,
-        "date": datetime.now().strftime("%d %b, %H:%M"),
+        # ISO 8601 — mini app shu bo'yicha saralaydi (F-10)
+        "date": datetime.now(timezone.utc).isoformat(),
         "read": False,
         "type": type
     })
+
+
+# ─── Payment settings ─────────────────────────────────────────
+#
+# Karta ma'lumoti yagona joyda — settings/payment hujjatida. Bot ham,
+# mini app ham shu yerdan o'qiydi (F-07). config.py faqat birinchi
+# marta to'ldirish uchun boshlang'ich qiymat beradi.
+
+def get_payment_settings() -> dict:
+    try:
+        snap = db.collection("settings").document("payment").get()
+        if snap.exists:
+            data = snap.to_dict() or {}
+            return {
+                "cardNumber": data.get("cardNumber") or CARD_NUMBER,
+                "cardOwner": data.get("cardOwner") or CARD_OWNER,
+            }
+    except Exception as e:
+        print(f"[ERR] get_payment_settings: {e}")
+    return {"cardNumber": CARD_NUMBER, "cardOwner": CARD_OWNER}
+
+
+def ensure_payment_settings():
+    """Hujjat yo'q bo'lsa config.py qiymatlari bilan yaratadi."""
+    try:
+        ref = db.collection("settings").document("payment")
+        if not ref.get().exists:
+            ref.set({"cardNumber": CARD_NUMBER, "cardOwner": CARD_OWNER})
+            print("[OK] settings/payment yaratildi")
+    except Exception as e:
+        print(f"[ERR] ensure_payment_settings: {e}")

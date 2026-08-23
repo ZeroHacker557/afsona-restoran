@@ -1,5 +1,6 @@
 import { ArrowLeft, Bell, BellRing, Package, Tag, Info } from 'lucide-react'
 import type { AppPage, Notification } from '../types/domain'
+import { formatDateTime } from '../utils/date'
 
 type Props = {
   notifications: Notification[]
@@ -69,7 +70,7 @@ export function NotificationsPage({ notifications, onBack }: Props) {
                   <div className="flex-1">
                     <h3 className="text-sm font-bold text-[#111426]">{notif.title}</h3>
                     <p className="mt-1 text-xs text-[#64748b] leading-relaxed">{notif.body}</p>
-                    <p className="mt-2 text-[10px] font-medium text-[#94a3b8]">{notif.date}</p>
+                    <p className="mt-2 text-[10px] font-medium text-[#94a3b8]">{formatDateTime(notif.date)}</p>
                   </div>
                   {!notif.read && (
                     <div className="mt-1 size-2 rounded-full bg-red-500 shrink-0" />

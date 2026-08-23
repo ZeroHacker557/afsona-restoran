@@ -3,6 +3,7 @@ import { ChevronLeft, Star, MessageSquare } from 'lucide-react'
 import type { UserProfile, Review, AppPage } from '../types/domain'
 import { subscribeToUserReviews } from '../lib/firebase'
 import { getTelegramUser } from '../utils/telegram'
+import { formatDate } from '../utils/date'
 
 type Props = {
   profile: UserProfile | null
@@ -60,7 +61,7 @@ export function ReviewsPage({ profile, onNavigate }: Props) {
               <div key={review.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-slate-500">Mahsulot ID: {review.productId}</span>
-                  <span className="text-xs text-slate-400">{review.date}</span>
+                  <span className="text-xs text-slate-400">{formatDate(review.date)}</span>
                 </div>
                 
                 <div className="flex gap-1 mb-3">

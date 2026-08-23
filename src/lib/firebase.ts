@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, setDoc, updateDoc, writeBatch, getDocs } from 'firebase/firestore'
+import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, setDoc, updateDoc, writeBatch, getDocs, getDoc, runTransaction } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
-import type { Product, Category, Order } from '../types/domain'
+import { parseDate } from '../utils/date'
+import type { Product, Category, Order, NewOrder, PaymentSettings, Notification } from '../types/domain'
 
 const firebaseConfig = {
   apiKey: "AIzaSyB-JENf9xTOJcEF81-6KJxb0HnCyLmjkc0",
@@ -86,18 +87,71 @@ function hashString(str: string): number {
   return hash
 }
 
-// Send Order to Firestore
-export async function sendOrderToFirestore(order: Order) {
+// ── ORDERS ───────────────────────────────────────────────────
+
+const ORDER_NUMBER_START = 1000
+
+/**
+ * Ketma-ket buyurtma raqamini transaction ichida oladi.
+ * Bu FAQAT ko'rsatish uchun — buyurtmaning haqiqiy kaliti Firestore doc.id.
+ * Hisoblagich ishlamay qolsa buyurtma baribir yaratiladi (zaxira raqam bilan).
+ */
+async function nextOrderNumber(): Promise<string> {
   try {
-    const ordersRef = collection(db, 'orders')
-    // Remove undefined values
-    const cleanOrder = JSON.parse(JSON.stringify(order))
-    await addDoc(ordersRef, {
-      ...cleanOrder,
-      createdAt: new Date().toISOString()
+    const counterRef = doc(db, 'counters', 'orders')
+    const value = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(counterRef)
+      const current = snap.exists() ? Number(snap.data().value) || ORDER_NUMBER_START : ORDER_NUMBER_START
+      const next = current + 1
+      tx.set(counterRef, { value: next }, { merge: true })
+      return next
     })
+    return `#${value}`
   } catch (error) {
-    console.error("Error writing order to Firestore:", error)
+    console.warn('[Firebase] Buyurtma hisoblagichi ishlamadi, zaxira raqam ishlatildi:', error)
+    return `#${Date.now().toString().slice(-8)}`
+  }
+}
+
+/**
+ * Buyurtmani Firestore'ga yozadi va {id, orderNumber} qaytaradi.
+ * Xatoni YUTMAYDI — chaqiruvchi uni ushlab, foydalanuvchiga xabar berishi shart (F-05).
+ */
+export async function sendOrderToFirestore(order: NewOrder): Promise<{ id: string; orderNumber: string }> {
+  const orderNumber = await nextOrderNumber()
+  const cleanOrder = JSON.parse(JSON.stringify(order))
+
+  const ref = await addDoc(collection(db, 'orders'), {
+    ...cleanOrder,
+    orderNumber,
+    createdAt: new Date().toISOString(),
+    // Bot shu bayroq bo'yicha ishlaydi: vaqtga emas, holatga tayanadi (F-21)
+    notified: false,
+  })
+
+  return { id: ref.id, orderNumber }
+}
+
+// ── PAYMENT SETTINGS ─────────────────────────────────────────
+
+const PAYMENT_FALLBACK: PaymentSettings = {
+  cardNumber: '',
+  cardOwner: '',
+}
+
+/** Karta ma'lumoti yagona manbadan — settings/payment hujjatidan (F-07). */
+export async function getPaymentSettings(): Promise<PaymentSettings> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'payment'))
+    if (!snap.exists()) return PAYMENT_FALLBACK
+    const data = snap.data()
+    return {
+      cardNumber: String(data.cardNumber || PAYMENT_FALLBACK.cardNumber),
+      cardOwner: String(data.cardOwner || PAYMENT_FALLBACK.cardOwner),
+    }
+  } catch (error) {
+    console.error("[Firebase] To'lov sozlamalarini o'qib bo'lmadi:", error)
+    return PAYMENT_FALLBACK
   }
 }
 
@@ -144,20 +198,23 @@ export function subscribeToUserOrders(userId: number, callback: (orders: Order[]
   // Sorting will be done on the client side.
   const q = query(ordersRef, where('userId', '==', userId))
   
-  return onSnapshot(q, (snapshot: any) => {
-    let orders = snapshot.docs.map((doc: any) => ({
-      ...doc.data()
-    })) as Order[]
-    
-    // Sort by createdAt descending
-    orders.sort((a, b) => {
-      const dateA = (a as any).createdAt || ''
-      const dateB = (b as any).createdAt || ''
-      return dateB.localeCompare(dateA)
+  return onSnapshot(q, (snapshot) => {
+    const orders = snapshot.docs.map((snap) => {
+      const data = snap.data()
+      return {
+        ...data,
+        // Haqiqiy kalit — hujjat identifikatori (F-03)
+        id: snap.id,
+        // Eski buyurtmalarda orderNumber yo'q: o'sha paytdagi "#1234567" ni ko'rsatamiz
+        orderNumber: data.orderNumber || data.id || snap.id,
+        createdAt: data.createdAt || '',
+      } as Order
     })
-    
+
+    orders.sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt))
+
     callback(orders)
-  }, (error: any) => {
+  }, (error) => {
     console.error("Error fetching user orders:", error)
   })
 }
@@ -185,7 +242,7 @@ export function subscribeToProductReviews(productId: number, callback: (reviews:
       id: doc.id
     } as Review))
     // sort by newest
-    reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    reviews.sort((a, b) => parseDate(b.date) - parseDate(a.date))
     callback(reviews)
   }, (error) => {
     console.error("Error fetching product reviews:", error)
@@ -202,9 +259,9 @@ export function subscribeToUserReviews(userId: number, callback: (reviews: Revie
       id: doc.id
     } as Review))
     // sort by newest
-    reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    reviews.sort((a, b) => parseDate(b.date) - parseDate(a.date))
     callback(reviews)
-  }, (error: any) => {
+  }, (error) => {
     console.error("Error fetching user reviews:", error)
   })
 }
@@ -213,16 +270,18 @@ export function subscribeToUserReviews(userId: number, callback: (reviews: Revie
 // NOTIFICATIONS
 // ==========================================
 
-export function subscribeToUserNotifications(userId: number, callback: (notifications: any[]) => void) {
+export function subscribeToUserNotifications(userId: number, callback: (notifications: Notification[]) => void) {
   const q = query(
     collection(db, 'notifications'),
     where('userId', '==', userId)
   )
   return onSnapshot(q, (snapshot) => {
-    const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any))
-    // Sort in memory by date desc (if real string dates)
-    notifs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification))
+    // ISO sana bo'yicha saralash; eski formatlar oxiriga tushadi (F-10)
+    notifs.sort((a, b) => parseDate(b.date) - parseDate(a.date))
     callback(notifs)
+  }, (error) => {
+    console.error("Error fetching notifications:", error)
   })
 }
 

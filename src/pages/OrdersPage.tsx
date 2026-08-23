@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ExternalLink, ShoppingBag, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, ExternalLink, ShoppingBag, SlidersHorizontal } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl } from '../utils/telegram'
+import { formatOrderDate } from '../utils/date'
 import { PageHeader } from '../components/layout/PageHeader'
-import { OrderImages } from '../components/order/OrderImages'
 import { openBotDeepLink } from '../utils/telegram'
 import type { Order } from '../types/domain'
 
@@ -53,11 +53,9 @@ export function OrdersPage({ orders, cartCount, onSearch, onOpenCart }: Props) {
     return { label: '⏳ Chek kutilmoqda', color: '#d97706', bg: '#fef9c3', needsAction: true }
   }
 
-  /** Botni ochib, FSM orqali chek so'rash */
+  /** Botni ochib, FSM orqali chek so'rash. Payload — Firestore hujjat id'si (F-03). */
   const handleSendReceipt = (orderId: string) => {
-    // # belgisini olib tashlaymiz (URL xavfsizligi uchun)
-    const safeId = orderId.replace('#', '')
-    openBotDeepLink(BOT_USERNAME, `receipt_${safeId}`)
+    openBotDeepLink(BOT_USERNAME, `receipt_${orderId}`)
   }
 
   return (
@@ -102,7 +100,7 @@ export function OrdersPage({ orders, cartCount, onSearch, onOpenCart }: Props) {
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                      {order.date}
+                      {formatOrderDate(order.createdAt) || order.date}
                     </p>
                     <div className="flex items-center gap-1.5">
                       {payInfo && !payInfo.needsAction && (
@@ -133,7 +131,7 @@ export function OrdersPage({ orders, cartCount, onSearch, onOpenCart }: Props) {
 
                 {/* Toggle & ID text */}
                 <div className="mt-1 flex items-center justify-between border-t border-slate-50 pt-2.5">
-                  <p className="text-[11px] font-bold" style={{ color: '#94a3b8' }}>ID: {order.id}</p>
+                  <p className="text-[11px] font-bold" style={{ color: '#94a3b8' }}>{order.orderNumber}</p>
                   <div className="flex items-center text-xs font-bold" style={{ color: '#7c3aed' }}>
                     {isExpanded ? 'Yashirish' : 'Tafsilotlar'}
                     <ChevronDown size={14} className={`ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />

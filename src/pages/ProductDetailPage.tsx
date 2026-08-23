@@ -6,6 +6,7 @@ import { getImageUrl, hapticSuccess, getTelegramUser } from '../utils/telegram'
 import { CartButton } from '../components/ui/CartButton'
 import type { Product, Review } from '../types/domain'
 import { addReview, subscribeToProductReviews } from '../lib/firebase'
+import { formatDate } from '../utils/date'
 
 type Props = {
   product: Product
@@ -57,7 +58,7 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
       userName: `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(),
       rating: userRating,
       comment: userComment.trim(),
-      date: new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      date: new Date().toISOString()
     }
 
     try {
@@ -237,7 +238,7 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
                     </div>
                     <div>
                       <p className="text-sm font-bold text-slate-800">{review.userName}</p>
-                      <p className="text-xs text-slate-400">{review.date}</p>
+                      <p className="text-xs text-slate-400">{formatDate(review.date)}</p>
                     </div>
                     <div className="ml-auto flex gap-0.5">
                       {[1, 2, 3, 4, 5].map((star) => (

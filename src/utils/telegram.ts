@@ -78,33 +78,44 @@ export function getTelegram(): TelegramWebApp | null {
   return window.Telegram?.WebApp ?? null
 }
 
-// Get current user info
-export function getTelegramUser() {
+export type TelegramUser = {
+  id: number
+  first_name: string
+  last_name?: string
+  username?: string
+  language_code?: string
+  photo_url?: string
+}
+
+// Get current user info.
+// Telegram tashqarisida FAQAT dev rejimida soxta foydalanuvchi qaytariladi —
+// production'da null, aks holda har bir tashrif Firestore'ga axlat yozuv
+// qo'shib yuboradi (F-06).
+export function getTelegramUser(): TelegramUser | null {
   const tg = getTelegram()
-  
-  // If running inside Telegram, use real user data
-  if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+
+  if (tg?.initDataUnsafe?.user) {
     return tg.initDataUnsafe.user
   }
-  
-  // Fallback for browser testing
+
+  if (!import.meta.env.DEV) return null
+
   try {
-    let mockUserStr = localStorage.getItem('mockTelegramUser')
+    const mockUserStr = localStorage.getItem('mockTelegramUser')
     if (mockUserStr) {
-      return JSON.parse(mockUserStr)
+      return JSON.parse(mockUserStr) as TelegramUser
     }
-    
-    // Generate a random mock user for browser testing
+
     const randomId = Math.floor(Math.random() * 1000000)
-    const newMockUser = {
+    const newMockUser: TelegramUser = {
       id: randomId,
-      first_name: "Test",
-      last_name: "Foydalanuvchi",
-      username: `testuser_${randomId}`
+      first_name: 'Test',
+      last_name: 'Foydalanuvchi',
+      username: `testuser_${randomId}`,
     }
     localStorage.setItem('mockTelegramUser', JSON.stringify(newMockUser))
     return newMockUser
-  } catch (e) {
+  } catch {
     return null
   }
 }
@@ -138,6 +149,13 @@ export function hapticSuccess() {
   const tg = getTelegram()
   if (tg) {
     tg.HapticFeedback.notificationOccurred('success')
+  }
+}
+
+export function hapticError() {
+  const tg = getTelegram()
+  if (tg) {
+    tg.HapticFeedback.notificationOccurred('error')
   }
 }
 

@@ -26,8 +26,12 @@ export type Category = {
 export type OrderStatus = 'Yangi' | 'Qabul qilindi' | 'Yetkazilmoqda' | 'Yetkazildi' | 'Bekor qilingan' | 'Rad etildi'
 
 export type Order = {
+  /** Firestore hujjat identifikatori — barcha texnik havolalar shu bo'yicha. */
   id: string
-  date: string
+  /** Foydalanuvchiga ko'rsatiladigan ketma-ket raqam, masalan "#1042". */
+  orderNumber: string
+  /** ISO 8601. Saralash va sana ko'rsatish shu maydondan. */
+  createdAt: string
   products: { product: Product; quantity: number; size?: string; color?: string; cartKey?: string }[]
   total: number
   status: OrderStatus
@@ -36,6 +40,18 @@ export type Order = {
   customer: OrderForm
   userId?: number
   username?: string
+  /** Bot bu buyurtmani adminga yuborganmi (F-21). */
+  notified?: boolean
+  /** Eski yozuvlarda formatlangan sana matni bo'lishi mumkin. */
+  date?: string
+}
+
+/** Firestore'ga yozishdan oldingi buyurtma — id va raqam server tomonda beriladi. */
+export type NewOrder = Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'notified'>
+
+export type PaymentSettings = {
+  cardNumber: string
+  cardOwner: string
 }
 
 export type OrderForm = {

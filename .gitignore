@@ -25,3 +25,7 @@ dist/
 # Environment variables
 .env
 .env.local
+
+# Python
+__pycache__/
+*.pyc

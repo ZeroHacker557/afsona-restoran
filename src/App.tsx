@@ -136,6 +136,7 @@ function App() {
               orderForm={shop.orderForm}
               onUpdateForm={shop.updateOrderForm}
               onSubmit={shop.submitOrder}
+              isSubmitting={shop.isSubmitting}
               onBack={() => shop.navigate('catalog')}
               onNavigate={shop.navigate}
             />

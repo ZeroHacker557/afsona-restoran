@@ -4,6 +4,7 @@ import { formatPrice } from '../data'
 import { IconButton } from '../components/ui/IconButton'
 import { OrderImages } from '../components/order/OrderImages'
 import { getTelegramUser } from '../utils/telegram'
+import { formatOrderDate } from '../utils/date'
 import type { AppPage, Order, UserProfile } from '../types/domain'
 
 const profileOptions: [LucideIcon, string, string][] = [
@@ -92,7 +93,7 @@ export function ProfilePage({ profile, orders, onNavigate, onNotify }: Props) {
               <h3 className="font-extrabold truncate text-base" style={{ color: '#111426' }}>
                 {lastOrder.products.map(p => p.product.name).join(', ')}
               </h3>
-              <p className="mt-1 text-xs font-bold" style={{ color: '#64748b' }}>ID: {lastOrder.id}</p>
+              <p className="mt-1 text-xs font-bold" style={{ color: '#64748b' }}>{lastOrder.orderNumber}</p>
               <div className="mt-2">
                 <OrderImages products={lastOrder.products} />
                 <p className="mt-1 text-[11px]" style={{ color: '#64748b' }}>{lastOrder.products.length} ta mahsulot</p>
@@ -100,7 +101,7 @@ export function ProfilePage({ profile, orders, onNavigate, onNotify }: Props) {
             </div>
             <div className="text-right shrink-0">
               <strong className="block text-lg" style={{ color: '#111426' }}>{formatPrice(lastOrder.total)}</strong>
-              <p className="mt-1 text-xs" style={{ color: '#94a3b8' }}>{lastOrder.date}</p>
+              <p className="mt-1 text-xs" style={{ color: '#94a3b8' }}>{formatOrderDate(lastOrder.createdAt) || lastOrder.date}</p>
             </div>
           </button>
         </section>
