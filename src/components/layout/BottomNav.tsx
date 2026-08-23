@@ -1,13 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import { Grid2X2, Heart, Home, ShoppingBag, UserRound } from 'lucide-react'
+import { useT, type TranslationKey } from '../../i18n'
 import type { AppPage } from '../../types/domain'
 
-const items: { id: Exclude<AppPage, 'detail'>; label: string; icon: LucideIcon }[] = [
-  { id: 'home', label: 'Bosh sahifa', icon: Home },
-  { id: 'catalog', label: 'Katalog', icon: Grid2X2 },
-  { id: 'favorites', label: 'Sevimlilar', icon: Heart },
-  { id: 'orders', label: 'Buyurtmalar', icon: ShoppingBag },
-  { id: 'profile', label: 'Profil', icon: UserRound },
+const items: { id: AppPage; labelKey: TranslationKey; icon: LucideIcon }[] = [
+  { id: 'home', labelKey: 'nav.home', icon: Home },
+  { id: 'catalog', labelKey: 'nav.catalog', icon: Grid2X2 },
+  { id: 'favorites', labelKey: 'nav.favorites', icon: Heart },
+  { id: 'orders', labelKey: 'nav.orders', icon: ShoppingBag },
+  { id: 'profile', labelKey: 'nav.profile', icon: UserRound },
 ]
 
 type Props = {
@@ -17,28 +18,34 @@ type Props = {
 }
 
 export function BottomNav({ page, onNavigate, cartCount }: Props) {
+  const t = useT()
+
   return (
     <nav className="bottom-nav">
-      {items.map(({ id, label, icon: Icon }) => (
-        <button
-          onClick={() => onNavigate(id)}
-          key={id}
-          className={'nav-item ' + (page === id ? 'active' : '')}
-        >
-          <span className="relative">
-            <Icon size={24} fill={page === id ? 'currentColor' : 'none'} />
-            {id === 'orders' && cartCount > 0 && (
-              <span
-                className="absolute -right-2 -top-1 grid size-4 place-items-center rounded-full text-[9px] font-bold"
-                style={{ background: '#7c3aed', color: '#fff' }}
-              >
-                {cartCount > 9 ? '9+' : cartCount}
-              </span>
-            )}
-          </span>
-          <span className="text-center">{label}</span>
-        </button>
-      ))}
+      {items.map(({ id, labelKey, icon: Icon }) => {
+        const active = page === id
+        return (
+          <button
+            onClick={() => onNavigate(id)}
+            key={id}
+            aria-current={active ? 'page' : undefined}
+            className={'nav-item ' + (active ? 'active' : '')}
+          >
+            <span className="relative">
+              <Icon size={23} fill={active ? 'currentColor' : 'none'} />
+              {id === 'orders' && cartCount > 0 && (
+                <span
+                  className="absolute -right-2 -top-1 grid size-4 place-items-center rounded-full text-[9px] font-bold"
+                  style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
+                >
+                  {cartCount > 9 ? '9+' : cartCount}
+                </span>
+              )}
+            </span>
+            <span className="text-center">{t(labelKey)}</span>
+          </button>
+        )
+      })}
     </nav>
   )
 }

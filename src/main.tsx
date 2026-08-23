@@ -3,22 +3,32 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import App from './App'
 import { TelegramGate } from './components/ui/TelegramGate'
-import { isTelegramEnvironment, waitForTelegram } from './utils/telegram'
+import { I18nProvider } from './i18n'
+import { applySafeArea, applyTelegramTheme, isTelegramEnvironment, waitForTelegram } from './utils/telegram'
 
 const root = createRoot(document.getElementById('root')!)
 
 function render(insideTelegram: boolean) {
+  // Tema birinchi bo'yoqdan oldin qo'llanadi — "oq chaqnash" bo'lmaydi
+  applyTelegramTheme()
+  applySafeArea()
+
   root.render(
-    <StrictMode>{insideTelegram ? <App /> : <TelegramGate />}</StrictMode>,
+    <StrictMode>
+      {insideTelegram ? (
+        <I18nProvider>
+          <App />
+        </I18nProvider>
+      ) : (
+        <TelegramGate />
+      )}
+    </StrictMode>,
   )
 }
 
-// Telegram ichida bo'lsak — darhol ochamiz, kutmaymiz.
 if (isTelegramEnvironment() || import.meta.env.DEV) {
   render(true)
 } else {
-  // SDK skripti hali yuklanmagan bo'lishi mumkin. Xulosani shoshilib
-  // chiqarmaymiz: qisqa kutib, keyin qaytadan tekshiramiz. Aks holda
-  // sekin internetda haqiqiy Telegram foydalanuvchisi ham to'siqqa uchraydi.
+  // SDK skripti hali yuklanmagan bo'lishi mumkin — shoshilmaymiz
   waitForTelegram().then(() => render(isTelegramEnvironment()))
 }

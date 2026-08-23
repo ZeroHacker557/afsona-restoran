@@ -1,3 +1,4 @@
+import { Suspense, lazy, useEffect } from 'react'
 import { BottomNav } from './components/layout/BottomNav'
 import { SearchOverlay } from './components/layout/SearchOverlay'
 import { CartDrawer } from './components/cart/CartDrawer'
@@ -11,13 +12,38 @@ import { HomePage } from './pages/HomePage'
 import { OrdersPage } from './pages/OrdersPage'
 import { ProductDetailPage } from './pages/ProductDetailPage'
 import { ProfilePage } from './pages/ProfilePage'
-import { AddressesPage } from './pages/AddressesPage'
 import { ProfileEditPage } from './pages/ProfileEditPage'
 import { ReviewsPage } from './pages/ReviewsPage'
 import { NotificationsPage } from './pages/NotificationsPage'
+import { LanguagePage } from './pages/LanguagePage'
+import { setupBackButton, toggleBackButton, watchTelegramAppearance } from './utils/telegram'
+import { useI18n } from './i18n'
+
+// Xarita kutubxonasi (~150 KB) faqat manzil sahifasi ochilganda yuklanadi (P-01)
+const AddressesPage = lazy(() =>
+  import('./pages/AddressesPage').then((m) => ({ default: m.AddressesPage })),
+)
+
+/** Pastki menyu ko'rinmaydigan sahifalar. */
+const FULLSCREEN_PAGES = [
+  'detail', 'checkout', 'addresses', 'profile_edit', 'reviews', 'notifications', 'language',
+]
+
+function PageFallback() {
+  return (
+    <div className="flex justify-center py-24">
+      <div
+        className="size-8 animate-spin rounded-full border-4"
+        style={{ borderColor: 'var(--brand-soft)', borderTopColor: 'var(--brand)' }}
+      />
+    </div>
+  )
+}
 
 function App() {
   const shop = useShopStore()
+  const { lang, setLang } = useI18n()
+
   const productActions = {
     onOpen: shop.openProduct,
     onAddToCart: shop.addToCart,
@@ -25,10 +51,26 @@ function App() {
     onToggleLike: shop.toggleLike,
   }
 
+  // Telegram temasi va xavfsiz zonasi
+  useEffect(() => watchTelegramAppearance(), [])
+
+  // Telegram BackButton — Android'ning tizim tugmasi ham shu bilan ishlaydi
+  useEffect(() => setupBackButton(shop.goBack), [shop.goBack])
+  useEffect(() => toggleBackButton(shop.canGoBack), [shop.canGoBack])
+
+  // Profilda saqlangan til — boshqa qurilmada ham o'sha tilda ochiladi
+  useEffect(() => {
+    const saved = shop.userProfile?.language
+    if (saved && saved !== lang && !localStorage.getItem('shopOnlineLang')) {
+      setLang(saved)
+    }
+  }, [shop.userProfile?.language, lang, setLang])
+
+  const goToCatalog = () => shop.navigate('catalog')
+
   return (
     <main className="app-shell">
       <div className="app-container">
-        {/* Search Overlay */}
         {shop.isSearchOpen && (
           <SearchOverlay
             query={shop.query}
@@ -39,7 +81,6 @@ function App() {
           />
         )}
 
-        {/* Cart Drawer */}
         {shop.isCartOpen && (
           <CartDrawer
             cartProducts={shop.cartProducts}
@@ -47,16 +88,13 @@ function App() {
             onClose={shop.closeCart}
             onUpdateQuantity={shop.updateCartQuantity}
             onCheckout={shop.goToCheckout}
+            onGoToCatalog={goToCatalog}
           />
         )}
 
-        {/* Toast Notification */}
         {shop.toast && <Toast message={shop.toast} onClose={shop.clearToast} />}
-
-        {/* Checkout Success Modal */}
         {shop.checkoutDone && <CheckoutSuccess onViewOrders={() => shop.navigate('orders')} />}
 
-        {/* Pages */}
         <div className="page-wrapper">
           {shop.page === 'home' && (
             <div className="page-animate">
@@ -69,17 +107,21 @@ function App() {
                 unreadNotificationsCount={shop.unreadNotificationsCount}
                 onSearch={() => shop.setSearchOpen(true)}
                 onNavigate={shop.navigate}
+                onOpenCategory={shop.openCategory}
                 onOpenCart={shop.openCart}
                 onNotify={shop.notify}
               />
             </div>
           )}
+
           {shop.page === 'catalog' && (
             <div className="page-animate">
               <CatalogPage
+                key={shop.catalogCategory ?? 'all'}
                 products={shop.products}
                 categories={shop.categories}
                 loading={shop.loading}
+                initialCategory={shop.catalogCategory}
                 {...productActions}
                 cartCount={shop.cartCount}
                 onSearch={() => shop.setSearchOpen(true)}
@@ -87,6 +129,7 @@ function App() {
               />
             </div>
           )}
+
           {shop.page === 'favorites' && (
             <div className="page-animate">
               <FavoritesPage
@@ -94,9 +137,11 @@ function App() {
                 {...productActions}
                 cartCount={shop.cartCount}
                 onOpenCart={shop.openCart}
+                onGoToCatalog={goToCatalog}
               />
             </div>
           )}
+
           {shop.page === 'orders' && (
             <div className="page-animate">
               <OrdersPage
@@ -106,9 +151,11 @@ function App() {
                 cartCount={shop.cartCount}
                 onSearch={() => shop.setSearchOpen(true)}
                 onOpenCart={shop.openCart}
+                onGoToCatalog={goToCatalog}
               />
             </div>
           )}
+
           {shop.page === 'profile' && (
             <div className="page-animate">
               <ProfilePage
@@ -119,17 +166,19 @@ function App() {
               />
             </div>
           )}
+
           {shop.page === 'detail' && shop.selectedProduct && (
             <ProductDetailPage
               product={shop.selectedProduct}
-              onAddToCart={(product, size, color) => shop.addToCart(product, size, color)}
-              onBack={() => shop.navigate('catalog')}
+              onAddToCart={shop.addToCart}
+              onBack={shop.goBack}
               likedIds={shop.likedIds}
               onToggleLike={shop.toggleLike}
               onOpenCart={shop.openCart}
               cartCount={shop.cartCount}
             />
           )}
+
           {shop.page === 'checkout' && (
             <CheckoutPage
               profile={shop.userProfile}
@@ -139,49 +188,49 @@ function App() {
               onUpdateForm={shop.updateOrderForm}
               onSubmit={shop.submitOrder}
               isSubmitting={shop.isSubmitting}
-              onBack={() => shop.navigate('catalog')}
+              onBack={shop.goBack}
               onNavigate={shop.navigate}
             />
           )}
+
           {shop.page === 'addresses' && (
             <div className="page-animate">
-              <AddressesPage
-                profile={shop.userProfile}
-                onNavigate={shop.navigate}
-                onNotify={shop.notify}
-              />
+              <Suspense fallback={<PageFallback />}>
+                <AddressesPage
+                  profile={shop.userProfile}
+                  onBack={shop.goBack}
+                  onNotify={shop.notify}
+                />
+              </Suspense>
             </div>
           )}
+
           {shop.page === 'profile_edit' && (
             <div className="page-animate">
-              <ProfileEditPage
-                profile={shop.userProfile}
-                onNavigate={shop.navigate}
-                onNotify={shop.notify}
-              />
+              <ProfileEditPage profile={shop.userProfile} onBack={shop.goBack} onNotify={shop.notify} />
             </div>
           )}
+
           {shop.page === 'reviews' && (
             <div className="page-animate">
-              <ReviewsPage
-                profile={shop.userProfile}
-                onNavigate={shop.navigate}
-              />
+              <ReviewsPage onBack={shop.goBack} />
             </div>
           )}
+
+          {shop.page === 'language' && (
+            <div className="page-animate">
+              <LanguagePage onBack={shop.goBack} onNotify={shop.notify} />
+            </div>
+          )}
+
           {shop.page === 'notifications' && (
             <div className="page-animate">
-              <NotificationsPage
-                notifications={shop.notifications}
-                onBack={() => shop.navigate('profile')}
-                onNavigate={shop.navigate}
-              />
+              <NotificationsPage notifications={shop.notifications} onBack={shop.goBack} />
             </div>
           )}
         </div>
 
-        {/* Bottom Navigation */}
-        {!['detail', 'checkout', 'addresses', 'profile_edit', 'reviews', 'notifications'].includes(shop.page) && (
+        {!FULLSCREEN_PAGES.includes(shop.page) && (
           <BottomNav page={shop.page} onNavigate={shop.navigate} cartCount={shop.cartCount} />
         )}
       </div>

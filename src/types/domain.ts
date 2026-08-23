@@ -1,4 +1,7 @@
-export type AppPage = 'home' | 'catalog' | 'favorites' | 'orders' | 'profile' | 'detail' | 'checkout' | 'addresses' | 'profile_edit' | 'reviews' | 'notifications'
+export type AppPage =
+  | 'home' | 'catalog' | 'favorites' | 'orders' | 'profile'
+  | 'detail' | 'checkout' | 'addresses' | 'profile_edit'
+  | 'reviews' | 'notifications' | 'language'
 
 export type Product = {
   id: number
@@ -104,8 +107,11 @@ export type UserProfile = {
   first_name: string
   last_name?: string
   username?: string
+  photo_url?: string
   phone?: string
   addresses: Address[]
+  /** Tanlangan til — qurilmalar orasida sinxron bo'lishi uchun. */
+  language?: 'uz' | 'ru'
 }
 
 export type Review = {

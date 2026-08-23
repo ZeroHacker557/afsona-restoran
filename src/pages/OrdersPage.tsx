@@ -1,15 +1,28 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ExternalLink, ShoppingBag, SlidersHorizontal } from 'lucide-react'
 import { formatPrice } from '../data'
-import { getImageUrl } from '../utils/telegram'
+import { getImageUrl, openBotDeepLink } from '../utils/telegram'
 import { formatOrderDate } from '../utils/date'
 import { PageHeader } from '../components/layout/PageHeader'
-import { openBotDeepLink } from '../utils/telegram'
-import type { Order } from '../types/domain'
+import { useT, type TranslationKey } from '../i18n'
+import type { Order, OrderStatus } from '../types/domain'
 
 const BOT_USERNAME = 'ecommercy_test_bot'
 
-const tabs = ['Barchasi', 'Yangi', 'Qabul qilindi', 'Bekor qilingan']
+const TABS: { id: string; labelKey: TranslationKey }[] = [
+  { id: 'all', labelKey: 'orders.tabAll' },
+  { id: 'new', labelKey: 'orders.tabNew' },
+  { id: 'accepted', labelKey: 'orders.tabAccepted' },
+  { id: 'cancelled', labelKey: 'orders.tabCancelled' },
+]
+
+function statusColor(status: string): string {
+  if (status === 'Bekor qilingan' || status === 'Rad etildi') return 'var(--danger)'
+  if (status === 'Yetkazilmoqda') return 'var(--warning)'
+  if (status === 'Yetkazildi') return 'var(--success)'
+  if (status === 'Qabul qilindi') return 'var(--info)'
+  return 'var(--brand)'
+}
 
 type Props = {
   orders: Order[]
@@ -18,145 +31,144 @@ type Props = {
   cartCount: number
   onSearch: () => void
   onOpenCart: () => void
+  onGoToCatalog: () => void
 }
 
-export function OrdersPage({ orders, authReady, isAuthenticated, cartCount, onSearch, onOpenCart }: Props) {
-  const [active, setActive] = useState('Barchasi')
+export function OrdersPage({
+  orders, authReady, isAuthenticated, cartCount, onSearch, onOpenCart, onGoToCatalog,
+}: Props) {
+  const t = useT()
+  const [active, setActive] = useState('all')
   const [newest, setNewest] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
-    if (active === 'Barchasi') return orders
-    if (active === 'Bekor qilingan') return orders.filter((o) => o.status === 'Bekor qilingan')
-    if (active === 'Yangi') return orders.filter((o) => o.status === 'Yangi')
-    if (active === 'Qabul qilindi')
-      return orders.filter(
-        (o) => o.status === 'Qabul qilindi' || o.status === 'Yetkazilmoqda' || o.status === 'Yetkazildi'
-      )
-    return orders
+    if (active === 'all') return orders
+    if (active === 'cancelled') {
+      return orders.filter((o) => o.status === 'Bekor qilingan' || o.status === 'Rad etildi')
+    }
+    if (active === 'new') return orders.filter((o) => o.status === 'Yangi')
+    return orders.filter(
+      (o) => o.status === 'Qabul qilindi' || o.status === 'Yetkazilmoqda' || o.status === 'Yetkazildi',
+    )
   }, [active, orders])
 
   const shown = newest ? filtered : [...filtered].reverse()
 
-  const getStatusColor = (status: string) => {
-    if (status === 'Bekor qilingan' || status === 'Rad etildi') return '#ef4444'
-    if (status === 'Yetkazilmoqda') return '#d97706'
-    if (status === 'Yetkazildi') return '#16a34a'
-    if (status === 'Qabul qilindi') return '#2563eb'
-    return '#7c3aed'
-  }
-
-  /** Karta uchun to'lov holati badge va tugma */
   const getPayInfo = (order: Order) => {
     if (order.paymentMethod !== 'Karta') return null
     const s = order.paymentStatus
-    if (s === 'Tolangan') return { label: '✅ To\'lov tasdiqlandi', color: '#16a34a', bg: '#dcfce7', needsAction: false }
-    if (s === 'Rad etildi') return { label: '❌ Chek rad etildi', color: '#ef4444', bg: '#fee2e2', needsAction: true }
-    return { label: '⏳ Chek kutilmoqda', color: '#d97706', bg: '#fef9c3', needsAction: true }
+    if (s === 'Tolangan') return { color: 'var(--success)', bg: 'var(--success-soft)', needsAction: false }
+    if (s === 'Rad etildi') return { color: 'var(--danger)', bg: 'var(--danger-soft)', needsAction: true, rejected: true }
+    return { color: 'var(--warning)', bg: 'var(--warning-soft)', needsAction: true, rejected: false }
   }
 
-  /** Botni ochib, FSM orqali chek so'rash. Payload — Firestore hujjat id'si (F-03). */
-  const handleSendReceipt = (orderId: string) => {
-    openBotDeepLink(BOT_USERNAME, `receipt_${orderId}`)
-  }
+  const translateStatus = (status: OrderStatus) => t(`status.${status}` as TranslationKey)
 
   return (
     <>
-      <PageHeader title="Buyurtmalarim" onSearch={onSearch} onCart={onOpenCart} cartCount={cartCount} />
+      <PageHeader title={t('orders.title')} onSearch={onSearch} onCart={onOpenCart} cartCount={cartCount} />
 
-      {/* Tabs */}
-      <div className="mt-7 flex gap-7 overflow-x-auto border-b border-slate-100 px-5 sm:px-10 scrollbar-none">
-        {tabs.map((label) => (
+      {/* Tablar */}
+      <div
+        className="mt-6 flex gap-6 overflow-x-auto border-b px-5 sm:px-10 scrollbar-none"
+        style={{ borderColor: 'var(--line)' }}
+      >
+        {TABS.map(({ id, labelKey }) => (
           <button
-            onClick={() => setActive(label)}
-            key={label}
-            className={'tab whitespace-nowrap ' + (active === label ? 'active' : '')}
+            onClick={() => setActive(id)}
+            key={id}
+            className={'tab whitespace-nowrap ' + (active === id ? 'active' : '')}
           >
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>
 
-      {/* Sort */}
-      <section className="flex items-center justify-end px-5 pt-6 sm:px-10">
+      <section className="flex items-center justify-end px-5 pt-5 sm:px-10">
         <button onClick={() => setNewest((v) => !v)} className="filter-button">
-          <SlidersHorizontal size={19} />
-          <span>{newest ? 'Eng yangi' : 'Eng eski'}</span>
-          <ChevronDown size={18} className={`transition-transform duration-300 ${!newest ? 'rotate-180' : ''}`} />
+          <SlidersHorizontal size={17} />
+          <span>{newest ? t('orders.newest') : t('orders.oldest')}</span>
+          <ChevronDown size={17} className={`transition-transform ${!newest ? 'rotate-180' : ''}`} />
         </button>
       </section>
 
-      {/* Orders */}
-      <section className="space-y-4 px-5 pb-32 pt-6 sm:px-10">
+      <section className="space-y-4 px-5 pb-32 pt-5 sm:px-10">
         {shown.map((order, i) => {
           const payInfo = getPayInfo(order)
           const isExpanded = expandedId === order.id
-          
-          return (
-            <div key={order.id} className="order-card flex-col gap-3" style={{ animationDelay: `${i * 0.08}s` }}>
-              <div 
-                className="flex flex-col gap-3 cursor-pointer" 
-                onClick={() => setExpandedId(isExpanded ? null : order.id)}
-              >
-                {/* Header row */}
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-                      {formatOrderDate(order.createdAt) || order.date}
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      {payInfo && !payInfo.needsAction && (
-                        <span className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase" style={{ background: payInfo.bg, color: payInfo.color }}>
-                          To'landi
-                        </span>
-                      )}
-                      <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: getStatusColor(order.status) }}>
-                        {order.status}
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="mt-1 flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-[15px] font-extrabold leading-tight" style={{ color: '#111426' }}>
-                        {order.products.map(p => p.product.name).join(', ')}
-                      </h3>
-                      <p className="mt-0.5 text-[11px] font-semibold" style={{ color: '#64748b' }}>
-                        {order.products.length} ta mahsulot
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-[15px] font-extrabold" style={{ color: '#111426' }}>
-                      {formatPrice(order.total)}
-                    </p>
+          return (
+            <div key={order.id} className="order-card flex-col gap-3" style={{ animationDelay: `${Math.min(i, 6) * 0.06}s` }}>
+              <div className="flex cursor-pointer flex-col gap-3" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--faint)' }}>
+                    {formatOrderDate(order.createdAt) || order.date}
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    {payInfo && !payInfo.needsAction && (
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase"
+                        style={{ background: payInfo.bg, color: payInfo.color }}
+                      >
+                        {t('orders.paid')}
+                      </span>
+                    )}
+                    <span
+                      className="text-[11px] font-bold uppercase tracking-wider"
+                      style={{ color: statusColor(order.status) }}
+                    >
+                      {translateStatus(order.status)}
+                    </span>
                   </div>
                 </div>
 
-                {/* Toggle & ID text */}
-                <div className="mt-1 flex items-center justify-between border-t border-slate-50 pt-2.5">
-                  <p className="text-[11px] font-bold" style={{ color: '#94a3b8' }}>{order.orderNumber}</p>
-                  <div className="flex items-center text-xs font-bold" style={{ color: '#7c3aed' }}>
-                    {isExpanded ? 'Yashirish' : 'Tafsilotlar'}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-[15px] font-extrabold leading-tight" style={{ color: 'var(--ink)' }}>
+                      {order.products.map((p) => p.product.name).join(', ')}
+                    </h3>
+                    <p className="mt-0.5 text-[11px] font-semibold" style={{ color: 'var(--muted)' }}>
+                      {t('orders.itemCount', { count: order.products.length })}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-[15px] font-extrabold" style={{ color: 'var(--ink)' }}>
+                    {formatPrice(order.total)}
+                  </p>
+                </div>
+
+                <div
+                  className="flex items-center justify-between border-t pt-2.5"
+                  style={{ borderColor: 'var(--line-soft)' }}
+                >
+                  <p className="text-[11px] font-bold" style={{ color: 'var(--faint)' }}>{order.orderNumber}</p>
+                  <div className="flex items-center text-xs font-bold" style={{ color: 'var(--brand)' }}>
+                    {isExpanded ? t('orders.hide') : t('orders.details')}
                     <ChevronDown size={14} className={`ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
                 </div>
               </div>
 
-              {/* Products List */}
               {isExpanded && (
-                <div className="mt-2 space-y-2 border-t border-slate-100 pt-3" style={{ animation: 'fadeIn 0.3s ease' }}>
+                <div
+                  className="space-y-2 border-t pt-3"
+                  style={{ borderColor: 'var(--line)', animation: 'fadeIn 0.25s ease' }}
+                >
                   {order.products.map((item, idx) => (
-                    <div key={idx} className="flex gap-3 items-center">
+                    <div key={item.cartKey ?? idx} className="flex items-center gap-3">
                       <img
                         src={item.product.images?.[0] ? getImageUrl(item.product.images[0]) : ''}
                         alt={item.product.name}
-                        className="size-12 rounded-lg border border-slate-100 object-contain p-1"
+                        loading="lazy"
+                        className="size-12 rounded-lg border object-contain p-1"
+                        style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}
                       />
-                      <div className="text-sm min-w-0">
-                        <p className="font-bold truncate" style={{ color: '#111426' }}>{item.product.name}</p>
-                        <p className="text-[11px] font-medium" style={{ color: '#64748b' }}>
-                          {item.quantity} ta
-                          {item.size && ` | O'lcham: ${item.size}`}
-                          {item.color && ` | Rang: ${item.color}`}
+                      <div className="min-w-0 text-sm">
+                        <p className="truncate font-bold" style={{ color: 'var(--ink)' }}>{item.product.name}</p>
+                        <p className="text-[11px] font-medium" style={{ color: 'var(--muted)' }}>
+                          {item.quantity} {t('common.pcs')}
+                          {item.size && ` · ${t('cart.size')}: ${item.size}`}
+                          {item.color && ` · ${t('cart.color')}: ${item.color}`}
                         </p>
                       </div>
                     </div>
@@ -164,19 +176,18 @@ export function OrdersPage({ orders, authReady, isAuthenticated, cartCount, onSe
                 </div>
               )}
 
-              {/* Chek yuborish tugmasi — faqat Karta + to'lanmagan */}
               {payInfo?.needsAction && (
                 <button
-                  onClick={() => handleSendReceipt(order.id)}
+                  onClick={() => openBotDeepLink(BOT_USERNAME, `receipt_${order.id}`)}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition active:scale-95"
                   style={{
-                    background: payInfo.color === '#ef4444' ? '#fee2e2' : '#fef9c3',
+                    background: payInfo.bg,
                     color: payInfo.color,
-                    border: `1.5px solid ${payInfo.color}30`,
+                    border: `1px solid ${payInfo.color}`,
                   }}
                 >
                   <ExternalLink size={15} />
-                  {payInfo.color === '#ef4444' ? '💳 Qayta chek yuborish' : '💳 To\'lov chekini yuborish'}
+                  {payInfo.rejected ? t('orders.resendReceipt') : t('orders.sendReceipt')}
                 </button>
               )}
             </div>
@@ -185,35 +196,48 @@ export function OrdersPage({ orders, authReady, isAuthenticated, cartCount, onSe
 
         {!authReady && (
           <div className="flex flex-col items-center py-20 text-center">
-            <div className="size-8 animate-spin rounded-full border-4" style={{ borderColor: '#ede9fe', borderTopColor: '#7c3aed' }} />
-            <p className="mt-4 text-sm" style={{ color: '#94a3b8' }}>Buyurtmalar yuklanmoqda...</p>
+            <div
+              className="size-8 animate-spin rounded-full border-4"
+              style={{ borderColor: 'var(--brand-soft)', borderTopColor: 'var(--brand)' }}
+            />
+            <p className="mt-4 text-sm" style={{ color: 'var(--muted)' }}>{t('common.loading')}</p>
           </div>
         )}
 
         {authReady && !isAuthenticated && (
-          <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.5s ease' }}>
-            <span className="grid size-20 place-items-center rounded-full" style={{ background: '#fef3c7', color: '#d97706' }}>
-              <ShoppingBag size={36} />
+          <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.4s ease' }}>
+            <span
+              className="grid size-20 place-items-center rounded-full"
+              style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}
+            >
+              <ShoppingBag size={34} />
             </span>
-            <p className="mt-5 text-lg font-bold" style={{ color: '#334155' }}>Buyurtmalarni ko'rsatib bo'lmadi</p>
-            <p className="mt-2 max-w-[260px] text-sm" style={{ color: '#94a3b8' }}>
-              Hisobingizga ulanib bo'lmadi. Buyurtmalaringiz saqlanib turibdi &mdash;
-              ilovani yopib, Telegram orqali qaytadan oching.
+            <p className="mt-5 text-lg font-bold" style={{ color: 'var(--ink-2)' }}>{t('orders.authFailed')}</p>
+            <p className="mt-2 max-w-[280px] text-sm" style={{ color: 'var(--muted)' }}>
+              {t('orders.authFailedText')}
             </p>
           </div>
         )}
 
         {authReady && isAuthenticated && !shown.length && (
-          <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.5s ease' }}>
-            <span className="grid size-20 place-items-center rounded-full" style={{ background: '#f5f0ff', color: '#a78bfa' }}>
-              <ShoppingBag size={36} />
+          <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.4s ease' }}>
+            <span
+              className="grid size-20 place-items-center rounded-full"
+              style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
+            >
+              <ShoppingBag size={34} />
             </span>
-            <p className="mt-5 text-lg font-bold" style={{ color: '#334155' }}>
-              {orders.length === 0 ? "Buyurtmalar hali yo'q" : "Bu bo'limda buyurtma topilmadi"}
+            <p className="mt-5 text-lg font-bold" style={{ color: 'var(--ink-2)' }}>
+              {orders.length === 0 ? t('orders.empty') : t('orders.emptyFilter')}
             </p>
-            <p className="mt-2 text-sm" style={{ color: '#94a3b8' }}>
-              {orders.length === 0 ? 'Birinchi buyurtmangizni bering!' : "Boshqa bo'limni tanlang."}
+            <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
+              {orders.length === 0 ? t('orders.emptyText') : t('orders.emptyFilterText')}
             </p>
+            {orders.length === 0 && (
+              <button onClick={onGoToCatalog} className="btn-ghost mt-6 px-6 py-3">
+                {t('cart.goToCatalog')}
+              </button>
+            )}
           </div>
         )}
       </section>

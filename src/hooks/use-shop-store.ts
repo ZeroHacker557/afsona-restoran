@@ -3,7 +3,10 @@ import { subscribeToCategories, subscribeToProducts, subscribeToUserOrders, subs
 import { ensureSignedIn, onAuthChanged, auth } from '../lib/auth'
 import { apiPost, ApiError } from '../lib/api'
 import type { AppPage, Category, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
-import { hapticError, hapticFeedback, hapticSuccess, initTelegram, getTelegramUser } from '../utils/telegram'
+import { hapticError, hapticFeedback, hapticSuccess, initTelegram } from '../utils/telegram'
+
+/** Pastki menyudagi asosiy sahifalar — ularga o'tganda tarix tozalanadi. */
+const ROOT_PAGES: AppPage[] = ['home', 'catalog', 'favorites', 'orders', 'profile']
 
 const LIKES_KEY = 'shopOnlineLikes'
 const CART_KEY = 'shopOnlineCart'
@@ -39,6 +42,10 @@ function loadCart(): CartItems {
 
 export function useShopStore() {
   const [page, setPage] = useState<AppPage>('home')
+  // Telegram BackButton shu tarix bo'yicha ishlaydi (D-03)
+  const [history, setHistory] = useState<AppPage[]>([])
+  // Bosh sahifadan tanlangan kategoriya katalogga uzatiladi (F-16)
+  const [catalogCategory, setCatalogCategory] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -178,16 +185,60 @@ export function useShopStore() {
     if (nextPage === 'notifications' && uid) {
       markNotificationsAsRead(Number(uid))
     }
-    setPage(nextPage)
+
+    setPage((current) => {
+      if (current === nextPage) return current
+      // Asosiy bo'limga o'tilsa tarix tozalanadi, ichki sahifada esa
+      // qayerdan kelganimiz eslab qolinadi.
+      setHistory((h) =>
+        ROOT_PAGES.includes(nextPage) ? [] : [...h.slice(-19), current],
+      )
+      return nextPage
+    })
+
     setCartOpen(false)
     setSearchOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  /** Bosh sahifadagi kategoriya bosilganda katalogni filtrlab ochamiz. */
+  const openCategory = useCallback((category: string) => {
+    setCatalogCategory(category)
+    setPage((current) => {
+      setHistory(() => (current === 'catalog' ? [] : []))
+      return 'catalog'
+    })
+    setCartOpen(false)
+    setSearchOpen(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    hapticFeedback('light')
+  }, [])
+
+  /** Orqaga: avval ochiq oyna yopiladi, keyin sahifa tarixi. */
+  const goBack = useCallback(() => {
+    if (isSearchOpen) {
+      setSearchOpen(false)
+      return
+    }
+    if (isCartOpen) {
+      setCartOpen(false)
+      return
+    }
+    setHistory((h) => {
+      if (h.length === 0) return h
+      setPage(h[h.length - 1])
+      window.scrollTo({ top: 0 })
+      return h.slice(0, -1)
+    })
+  }, [isSearchOpen, isCartOpen])
+
   const openProduct = useCallback((product: Product) => {
     setSelectedProduct(product)
     setCartOpen(false)
-    setPage('detail')
+    setPage((current) => {
+      setHistory((h) => [...h.slice(-19), current])
+      return 'detail'
+    })
     window.scrollTo({ top: 0, behavior: 'smooth' })
     hapticFeedback('light')
   }, [])
@@ -237,11 +288,14 @@ export function useShopStore() {
 
   const goToCheckout = useCallback(() => {
     setCartOpen(false)
-    setPage('checkout')
+    setPage((current) => {
+      setHistory((h) => [...h.slice(-19), current])
+      return 'checkout'
+    })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
-  const updateOrderForm = useCallback((field: keyof OrderForm, value: any) => {
+  const updateOrderForm = useCallback((field: keyof OrderForm, value: unknown) => {
     setOrderForm((prev) => ({ ...prev, [field]: value }))
   }, [])
 
@@ -307,13 +361,15 @@ export function useShopStore() {
   }, [isSubmitting, orderForm, cartProducts, notify])
 
   return {
-    page, products, categories, loading,
+    page, history, canGoBack: history.length > 0 || isCartOpen || isSearchOpen,
+    products, categories, loading,
     cartItems, cartCount, cartTotal, cartProducts,
     likedIds, selectedProduct,
     isSearchOpen, isCartOpen, query, searchResults, toast,
     myOrders, checkoutDone, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
     notifications, unreadNotificationsCount,
-    navigate, openProduct, toggleLike,
+    catalogCategory, openCategory,
+    navigate, goBack, openProduct, toggleLike,
     setSearchOpen, setQuery,
     addToCart, updateCartQuantity,
     openCart, closeCart, goToCheckout,

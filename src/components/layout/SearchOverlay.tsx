@@ -1,6 +1,7 @@
 import { ArrowLeft, Search, ShoppingBag } from 'lucide-react'
 import { formatPrice } from '../../data'
 import { getImageUrl } from '../../utils/telegram'
+import { useT } from '../../i18n'
 import type { Product } from '../../types/domain'
 
 type Props = {
@@ -12,68 +13,81 @@ type Props = {
 }
 
 export function SearchOverlay({ query, results, onQueryChange, onClose, onOpenProduct }: Props) {
+  const t = useT()
+
   return (
     <div className="search-overlay p-5 sm:p-10">
       <div className="mx-auto max-w-3xl">
-        {/* Search Bar */}
         <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="grid size-12 shrink-0 place-items-center rounded-2xl transition hover:bg-violet-50 active:scale-90"
-            style={{ background: '#f8fafc', color: '#111426' }}
-          >
+          <button onClick={onClose} className="icon-button shrink-0" aria-label={t('common.back')}>
             <ArrowLeft />
           </button>
-          <div className="flex flex-1 items-center gap-2 rounded-2xl px-4" style={{ background: '#f8fafc' }}>
-            <Search style={{ color: '#94a3b8' }} />
+          <div
+            className="flex flex-1 items-center gap-2 rounded-2xl px-4"
+            style={{ background: 'var(--surface-2)' }}
+          >
+            <Search style={{ color: 'var(--faint)' }} />
             <input
               type="search"
               autoFocus
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="Qidirish..."
+              placeholder={t('search.placeholder')}
               className="h-12 w-full bg-transparent outline-none"
-              style={{ color: '#111426' }}
+              style={{ color: 'var(--ink)' }}
             />
           </div>
         </div>
 
-        {/* Results */}
-        <h2 className="mt-8 text-xl font-extrabold" style={{ color: '#111426' }}>
-          {query ? `"${query}" bo'yicha natijalar` : 'Qidiruv natijalari'}
+        <h2 className="mt-8 text-xl font-extrabold" style={{ color: 'var(--ink)' }}>
+          {query ? t('search.results', { query }) : t('search.title')}
         </h2>
 
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
           {results.map((product, i) => (
             <button
               key={product.id}
-              onClick={() => {
-                onOpenProduct(product)
-                onClose()
+              onClick={() => { onOpenProduct(product); onClose() }}
+              className="flex items-center gap-3 rounded-2xl border p-3 text-left transition active:scale-[0.98]"
+              style={{
+                borderColor: 'var(--line)',
+                background: 'var(--surface)',
+                animation: `fadeInUp 0.25s ease ${Math.min(i, 8) * 0.04}s both`,
               }}
-              className="flex items-center gap-3 rounded-2xl border p-3 text-left transition hover:shadow-sm active:scale-[0.98]"
-              style={{ borderColor: '#f1f5f9', color: '#111426', animation: `fadeInUp 0.3s ease ${i * 0.05}s both` }}
             >
               {product.images?.[0] ? (
-                <img className="size-16 rounded-xl object-contain" src={getImageUrl(product.images[0])} alt={product.name} />
+                <img
+                  className="size-16 shrink-0 rounded-xl object-contain"
+                  style={{ background: 'var(--surface-2)' }}
+                  src={getImageUrl(product.images[0])}
+                  alt={product.name}
+                  loading="lazy"
+                />
               ) : (
-                <div className="grid size-16 place-items-center rounded-xl" style={{ background: '#f8fafc', color: '#cbd5e1' }}>
+                <div
+                  className="grid size-16 shrink-0 place-items-center rounded-xl"
+                  style={{ background: 'var(--surface-2)', color: 'var(--faint)' }}
+                >
                   <ShoppingBag size={20} />
                 </div>
               )}
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-bold" style={{ color: '#111426' }}>{product.name}</span>
-                <small className="mt-1 block font-bold" style={{ color: '#7c3aed' }}>{formatPrice(product.price)}</small>
+                <span className="block truncate text-sm font-bold" style={{ color: 'var(--ink)' }}>
+                  {product.name}
+                </span>
+                <small className="mt-1 block font-bold" style={{ color: 'var(--brand)' }}>
+                  {formatPrice(product.price)}
+                </small>
               </span>
             </button>
           ))}
         </div>
 
         {query && !results.length && (
-          <div className="py-16 text-center" style={{ color: '#94a3b8', animation: 'fadeInUp 0.4s ease' }}>
+          <div className="py-16 text-center" style={{ color: 'var(--muted)', animation: 'fadeInUp 0.3s ease' }}>
             <Search className="mx-auto mb-3" size={42} />
-            <p className="font-bold" style={{ color: '#334155' }}>Hech narsa topilmadi</p>
-            <p className="mt-1 text-sm">Boshqa kalit so'z bilan qidirib ko'ring.</p>
+            <p className="font-bold" style={{ color: 'var(--ink-2)' }}>{t('search.notFound')}</p>
+            <p className="mt-1 text-sm">{t('search.notFoundText')}</p>
           </div>
         )}
       </div>

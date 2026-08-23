@@ -45,7 +45,7 @@ service cloud.firestore {
       allow create: if false;  // /api/auth yaratadi
       allow update: if isOwner(userId)
                     && request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['first_name', 'last_name', 'phone', 'addresses']);
+                         .hasOnly(['first_name', 'last_name', 'phone', 'addresses', 'language']);
       allow delete: if false;
     }
 

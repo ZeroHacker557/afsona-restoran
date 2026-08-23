@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { parseDate } from '../utils/date'
-import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notification } from '../types/domain'
+import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notification, UserProfile } from '../types/domain'
 
 const firebaseConfig = {
   apiKey: "AIzaSyB-JENf9xTOJcEF81-6KJxb0HnCyLmjkc0",
@@ -137,21 +137,21 @@ export async function getPaymentSettings(): Promise<PaymentSettings> {
 
 // Foydalanuvchi hujjatini /api/auth yaratadi va yangilaydi.
 
-export function subscribeToUserProfile(userId: number, callback: (profile: any) => void) {
+export function subscribeToUserProfile(userId: number, callback: (profile: UserProfile | null) => void) {
   const userRef = doc(db, 'users', String(userId))
   
-  return onSnapshot(userRef, (snapshot: any) => {
+  return onSnapshot(userRef, (snapshot) => {
     if (snapshot.exists()) {
-      callback(snapshot.data())
+      callback(snapshot.data() as UserProfile)
     } else {
       callback(null)
     }
-  }, (error: any) => {
+  }, (error) => {
     console.error("Error fetching user profile:", error)
   })
 }
 
-export async function updateUserProfile(userId: number, data: any) {
+export async function updateUserProfile(userId: number, data: Partial<UserProfile>) {
   try {
     const userRef = doc(db, 'users', String(userId))
     await updateDoc(userRef, data)

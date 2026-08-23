@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, Heart, Minus, Plus, ShoppingCart, Star, Truck, UserRound, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Heart, Minus, MessageSquare, Plus, ShoppingCart, Star, Truck, UserRound } from 'lucide-react'
 import { formatPrice } from '../data'
-import { getImageUrl, hapticSuccess, getTelegramUser } from '../utils/telegram'
-import { CartButton } from '../components/ui/CartButton'
-import type { Product, Review } from '../types/domain'
-import { addReview, subscribeToProductReviews } from '../lib/firebase'
+import { getImageUrl, hapticSuccess, getTelegramUser, showAlert } from '../utils/telegram'
 import { formatDate } from '../utils/date'
+import { CartButton } from '../components/ui/CartButton'
+import { addReview, subscribeToProductReviews } from '../lib/firebase'
+import { useT } from '../i18n'
+import type { Product, Review } from '../types/domain'
 
 type Props = {
   product: Product
@@ -18,19 +19,25 @@ type Props = {
   cartCount: number
 }
 
-export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onToggleLike, onOpenCart, cartCount }: Props) {
+export function ProductDetailPage({
+  product, onAddToCart, onBack, likedIds, onToggleLike, onOpenCart, cartCount,
+}: Props) {
+  const t = useT()
   const [activeImage, setActiveImage] = useState(0)
   const [count, setCount] = useState(1)
-  const colorsList = product.colors || (product.color ? product.color.split(',').map(c => c.trim()).filter(Boolean) : [])
+
+  const colorsList = product.colors
+    || (product.color ? product.color.split(',').map((c) => c.trim()).filter(Boolean) : [])
   const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || '')
   const [selectedColor, setSelectedColor] = useState(colorsList[0] || '')
+
   const favourite = likedIds.includes(product.id)
   const images = product.images || []
   const stock = product.stock
   const soldOut = stock === 0
   const lowStock = typeof stock === 'number' && stock > 0 && stock <= 5
+  const maxCount = typeof stock === 'number' && stock > 0 ? Math.min(stock, 99) : 99
 
-  // Reviews state
   const [reviews, setReviews] = useState<Review[]>([])
   const [userRating, setUserRating] = useState(0)
   const [userComment, setUserComment] = useState('')
@@ -38,39 +45,35 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
   const tgUser = getTelegramUser()
 
   useEffect(() => {
-    const unsub = subscribeToProductReviews(product.id, (fetched) => {
-      setReviews(fetched)
-    })
+    const unsub = subscribeToProductReviews(product.id, setReviews)
     return () => unsub()
   }, [product.id])
 
-  // Calculate dynamic rating
-  const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0)
-  const avgRating = reviews.length > 0 ? (totalRating / reviews.length).toFixed(1) : product.rating.toFixed(1)
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+    : product.rating.toFixed(1)
   const reviewCount = reviews.length > 0 ? reviews.length : product.reviews
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!tgUser) return alert("Faqat ro'yxatdan o'tgan foydalanuvchilar sharh qoldirishi mumkin")
-    if (userRating === 0) return alert("Iltimos, yulduzchalar orqali baholang")
+    if (!tgUser) return showAlert(t('profile.userNotFound'))
+    if (userRating === 0) return showAlert(t('reviews.needRating'))
 
     setIsSubmitting(true)
-    const newReview: Omit<Review, 'id'> = {
-      productId: product.id,
-      userId: tgUser.id,
-      userName: `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(),
-      rating: userRating,
-      comment: userComment.trim(),
-      date: new Date().toISOString()
-    }
-
     try {
-      await addReview(newReview)
+      await addReview({
+        productId: product.id,
+        userId: tgUser.id,
+        userName: `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(),
+        rating: userRating,
+        comment: userComment.trim(),
+        date: new Date().toISOString(),
+      })
       hapticSuccess()
       setUserRating(0)
       setUserComment('')
-    } catch (e) {
-      alert("Xatolik yuz berdi")
+    } catch {
+      showAlert(t('reviews.error'))
     } finally {
       setIsSubmitting(false)
     }
@@ -82,92 +85,116 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
     setCount(1)
   }
 
-  // Omborda bor miqdordan ortiq tanlab bo'lmaydi
-  const maxCount = typeof stock === 'number' && stock > 0 ? Math.min(stock, 99) : 99
-
   return (
     <>
-      {/* Header */}
       <header className="flex items-center justify-between px-5 pt-8 sm:px-10 page-animate">
-        <button onClick={onBack} className="grid size-11 place-items-center rounded-2xl transition hover:bg-violet-50 active:scale-90" style={{ color: '#111426' }}>
-          <ArrowLeft size={24} />
+        <button onClick={onBack} className="icon-button" aria-label={t('common.back')}>
+          <ArrowLeft size={22} />
         </button>
-        <h2 className="text-lg font-bold" style={{ color: '#111426' }}>Mahsulot</h2>
+        <h2 className="text-lg font-bold" style={{ color: 'var(--ink)' }}>{t('product.title')}</h2>
         <div className="flex gap-1">
-          <button onClick={() => onToggleLike(product.id)} className="grid size-11 place-items-center rounded-2xl transition hover:bg-violet-50 active:scale-90" style={{ color: favourite ? '#6c20f5' : '#111426' }}>
-            <Heart size={22} fill={favourite ? '#6c20f5' : 'none'} />
+          <button
+            onClick={() => onToggleLike(product.id)}
+            className="icon-button"
+            style={{ color: favourite ? 'var(--brand)' : 'var(--ink)' }}
+            aria-label={t('favorites.title')}
+            aria-pressed={favourite}
+          >
+            <Heart size={21} fill={favourite ? 'currentColor' : 'none'} />
           </button>
           <CartButton count={cartCount} onClick={onOpenCart} />
         </div>
       </header>
 
-      {/* Image */}
-      <section className="relative mx-auto mt-3 max-w-3xl px-5" style={{ animation: 'fadeInUp 0.5s ease' }}>
-        {product.discount && (
-          <span className="absolute left-8 top-7 z-10 rounded-lg px-2.5 py-1 text-xs font-bold shadow-md" style={{ background: '#f43f5e', color: '#fff' }}>
+      {/* Rasm galereyasi */}
+      <section className="relative mx-auto mt-3 max-w-3xl px-5" style={{ animation: 'fadeInUp 0.4s ease' }}>
+        {product.discount && !soldOut && (
+          <span
+            className="absolute left-8 top-3 z-10 rounded-lg px-2.5 py-1 text-xs font-bold"
+            style={{ background: 'var(--brand-strong)', color: 'var(--brand-ink)' }}
+          >
             {product.discount}
           </span>
         )}
-        {images[activeImage] ? (
-          <img className="mx-auto h-[280px] w-full object-contain sm:h-[400px]" src={getImageUrl(images[activeImage])} alt={product.name} />
-        ) : (
-          <div className="mx-auto grid h-[280px] w-full place-items-center sm:h-[400px]" style={{ color: '#cbd5e1' }}>
-            <ShoppingCart size={60} />
-          </div>
-        )}
+        <div
+          className="mx-auto grid h-[280px] w-full place-items-center overflow-hidden rounded-2xl sm:h-[380px]"
+          style={{ background: 'var(--surface-2)', opacity: soldOut ? 0.55 : 1 }}
+        >
+          {images[activeImage] ? (
+            <img
+              className="size-full object-contain p-4"
+              src={getImageUrl(images[activeImage])}
+              alt={product.name}
+              decoding="async"
+            />
+          ) : (
+            <ShoppingCart size={56} style={{ color: 'var(--faint)' }} />
+          )}
+        </div>
         {images.length > 1 && (
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">
+          <div className="mt-3 flex justify-center gap-2">
             {images.map((_, i) => (
-              <button key={i} onClick={() => setActiveImage(i)} className={'dot ' + (activeImage === i ? 'active' : '')} />
+              <button
+                key={i}
+                onClick={() => setActiveImage(i)}
+                className={'dot ' + (activeImage === i ? 'active' : '')}
+                aria-label={`${i + 1}`}
+              />
             ))}
           </div>
         )}
       </section>
 
-      {/* Info */}
-      <section className="mx-5 mt-5 rounded-t-[28px] border-t border-slate-100 pb-40 pt-7 sm:mx-10 page-animate">
+      <section className="mx-5 mt-5 pb-40 sm:mx-10 page-animate">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="font-bold" style={{ color: '#7c3aed' }}>
-            {product.category}
-            <span className="ml-1 inline-grid size-4 place-items-center rounded-full text-[9px]" style={{ background: '#2563eb', color: '#fff' }}>✓</span>
-          </span>
-          <span className="flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold" style={{ background: '#f5f0ff', color: '#6d28d9' }}>
-            <Truck size={18} /> Tez yetkazib berish
+          <span className="font-bold" style={{ color: 'var(--brand)' }}>{product.category}</span>
+          <span
+            className="flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-bold"
+            style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
+          >
+            <Truck size={17} /> {t('product.fastDelivery')}
           </span>
         </div>
 
-        <h1 className="mt-4 text-2xl font-extrabold sm:text-3xl" style={{ color: '#111426' }}>{product.name}</h1>
+        <h1 className="mt-4 text-2xl font-extrabold sm:text-3xl" style={{ color: 'var(--ink)', textWrap: 'balance' }}>
+          {product.name}
+        </h1>
 
-        <p className="mt-3 flex flex-wrap items-center gap-2 text-sm" style={{ color: '#64748b' }}>
-          <Star size={19} fill="#ffb000" style={{ color: '#fbbf24' }} />
-          {avgRating} ({reviewCount} ta baho)
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
+          <Star size={18} fill="var(--warning)" style={{ color: 'var(--warning)' }} />
+          {avgRating} ({t('product.ratingCount', { count: reviewCount })})
         </p>
 
-        <div className="mt-6 flex items-baseline gap-3">
-          <strong className="text-3xl" style={{ color: '#111426' }}>{formatPrice(product.price)}</strong>
-          {product.oldPrice && <del style={{ color: '#94a3b8' }}>{formatPrice(product.oldPrice)}</del>}
+        <div className="mt-5 flex items-baseline gap-3">
+          <strong className="text-3xl" style={{ color: 'var(--ink)' }}>{formatPrice(product.price)}</strong>
+          {product.oldPrice && <del style={{ color: 'var(--faint)' }}>{formatPrice(product.oldPrice)}</del>}
         </div>
 
         {soldOut && (
-          <p className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold" style={{ background: '#f1f5f9', color: '#64748b' }}>
-            Hozircha sotuvda yo&rsquo;q
+          <p
+            className="mt-3 inline-block rounded-xl px-3 py-2 text-sm font-bold"
+            style={{ background: 'var(--surface-3)', color: 'var(--muted)' }}
+          >
+            {t('product.soldOutLong')}
           </p>
         )}
         {lowStock && (
-          <p className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold" style={{ background: '#fff7ed', color: '#c2410c' }}>
-            Omborda {stock} ta qoldi
+          <p
+            className="mt-3 inline-block rounded-xl px-3 py-2 text-sm font-bold"
+            style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}
+          >
+            {t('product.lowStock', { count: stock! })}
           </p>
         )}
 
-        {/* Colors */}
         {colorsList.length > 0 && (
           <section className="detail-panel">
-            <b style={{ color: '#111426' }}>Rangni tanlang</b>
+            <b style={{ color: 'var(--ink)' }}>{t('product.chooseColor')}</b>
             <div className="mt-4 flex flex-wrap gap-3">
               {colorsList.map((c) => (
-                <button 
-                  onClick={() => setSelectedColor(c)} 
-                  className={'size-chip ' + (selectedColor === c ? 'active' : '')} 
+                <button
+                  onClick={() => setSelectedColor(c)}
+                  className={'size-chip px-4 ' + (selectedColor === c ? 'active' : '')}
                   key={c}
                 >
                   <b>{c}</b>
@@ -177,13 +204,16 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
           </section>
         )}
 
-        {/* Sizes */}
         {product.sizes && product.sizes.length > 0 && (
           <section className="detail-panel">
-            <b style={{ color: '#111426' }}>Razmerni tanlang</b>
+            <b style={{ color: 'var(--ink)' }}>{t('product.chooseSize')}</b>
             <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-7">
               {product.sizes.map((s) => (
-                <button onClick={() => setSelectedSize(s)} className={'size-chip ' + (selectedSize === s ? 'active' : '')} key={s}>
+                <button
+                  onClick={() => setSelectedSize(s)}
+                  className={'size-chip ' + (selectedSize === s ? 'active' : '')}
+                  key={s}
+                >
                   <b>{s}</b>
                 </button>
               ))}
@@ -191,86 +221,91 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
           </section>
         )}
 
-        {/* Description */}
         {product.description && (
           <section className="detail-panel">
-            <b style={{ color: '#111426' }}>Mahsulot haqida</b>
-            <p className="mt-4 text-sm leading-7" style={{ color: '#64748b' }}>{product.description}</p>
+            <b style={{ color: 'var(--ink)' }}>{t('product.about')}</b>
+            <p className="mt-4 text-sm leading-7" style={{ color: 'var(--muted)' }}>{product.description}</p>
           </section>
         )}
 
-        {/* Reviews Section */}
+        {/* Sharhlar */}
         <section className="mt-8">
-          <h3 className="text-xl font-bold" style={{ color: '#111426' }}>Sharhlar</h3>
-          
-          {/* Write Review Form */}
-          <form onSubmit={handleSubmitReview} className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-bold text-slate-700 mb-2">Mahsulotni baholang:</p>
-            <div className="flex gap-2 mb-4">
+          <h3 className="text-xl font-bold" style={{ color: 'var(--ink)' }}>{t('reviews.title')}</h3>
+
+          <form
+            onSubmit={handleSubmitReview}
+            className="mt-5 rounded-2xl border p-4"
+            style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}
+          >
+            <p className="mb-2 text-sm font-bold" style={{ color: 'var(--ink-2)' }}>{t('reviews.rateThis')}</p>
+            <div className="mb-4 flex gap-2">
               {[1, 2, 3, 4, 5].map((star) => (
-                <button 
-                  key={star} 
-                  type="button" 
+                <button
+                  key={star}
+                  type="button"
                   onClick={() => setUserRating(star)}
                   className="transition hover:scale-110 active:scale-95"
+                  aria-label={`${star}`}
                 >
-                  <Star 
-                    size={28} 
-                    fill={star <= userRating ? "#fbbf24" : "none"} 
-                    color={star <= userRating ? "#fbbf24" : "#cbd5e1"} 
+                  <Star
+                    size={28}
+                    fill={star <= userRating ? 'var(--warning)' : 'none'}
+                    style={{ color: star <= userRating ? 'var(--warning)' : 'var(--line)' }}
                   />
                 </button>
               ))}
             </div>
-            
-            <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 focus-within:border-purple-300 focus-within:ring-2 focus-within:ring-purple-100 transition-all">
-              <MessageSquare size={20} className="mt-0.5 shrink-0 text-slate-400" />
+
+            <div className="field items-start">
+              <MessageSquare size={19} className="mt-0.5 shrink-0" style={{ color: 'var(--faint)' }} />
               <textarea
                 value={userComment}
                 onChange={(e) => setUserComment(e.target.value)}
-                placeholder="O'z fikringizni yozib qoldiring (ixtiyoriy)..."
+                placeholder={t('reviews.placeholder')}
                 rows={2}
-                className="w-full resize-none bg-transparent text-sm text-slate-800 outline-none"
+                className="resize-none text-sm"
               />
             </div>
-            
-            <button
-              type="submit"
-              disabled={isSubmitting || userRating === 0}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-3 text-sm font-bold text-white transition hover:bg-purple-700 active:scale-95 disabled:opacity-50"
-            >
-              {isSubmitting ? "Yuborilmoqda..." : "Sharh qoldirish"}
+
+            <button type="submit" disabled={isSubmitting || userRating === 0} className="btn-primary mt-4 w-full py-3 text-sm">
+              {isSubmitting ? t('reviews.submitting') : t('reviews.submit')}
             </button>
           </form>
 
-          {/* Reviews List */}
           <div className="mt-6 space-y-4">
             {reviews.length === 0 ? (
-              <p className="text-center text-sm text-slate-500 py-4">Hozircha sharhlar yo'q. Birinchi bo'lib baholang!</p>
+              <p className="py-4 text-center text-sm" style={{ color: 'var(--muted)' }}>{t('reviews.empty')}</p>
             ) : (
-              reviews.map(review => (
-                <div key={review.id} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+              reviews.map((review) => (
+                <div
+                  key={review.id}
+                  className="border-b pb-4 last:border-0 last:pb-0"
+                  style={{ borderColor: 'var(--line-soft)' }}
+                >
                   <div className="flex items-center gap-2">
-                    <div className="grid size-8 place-items-center rounded-full bg-slate-100 text-slate-500">
+                    <div
+                      className="grid size-8 place-items-center rounded-full"
+                      style={{ background: 'var(--surface-3)', color: 'var(--muted)' }}
+                    >
                       <UserRound size={16} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-800">{review.userName}</p>
-                      <p className="text-xs text-slate-400">{formatDate(review.date)}</p>
+                      <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{review.userName}</p>
+                      <p className="text-xs" style={{ color: 'var(--faint)' }}>{formatDate(review.date)}</p>
                     </div>
                     <div className="ml-auto flex gap-0.5">
                       {[1, 2, 3, 4, 5].map((star) => (
-                        <Star 
-                          key={star} 
-                          size={14} 
-                          fill={star <= review.rating ? "#fbbf24" : "none"} 
-                          color={star <= review.rating ? "#fbbf24" : "#cbd5e1"} 
+                        <Star
+                          key={star}
+                          size={13}
+                          fill={star <= review.rating ? 'var(--warning)' : 'none'}
+                          style={{ color: star <= review.rating ? 'var(--warning)' : 'var(--line)' }}
                         />
                       ))}
                     </div>
                   </div>
                   {review.comment && (
-                    <p className="mt-2 text-sm text-slate-600 leading-relaxed ml-10">
+                    <p className="ml-10 mt-2 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
                       {review.comment}
                     </p>
                   )}
@@ -281,38 +316,50 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
         </section>
       </section>
 
-      {/* Bottom Bar via Portal to avoid CSS containing block issues */}
+      {/* Pastki panel */}
       {createPortal(
-        <div className="fixed bottom-0 left-0 right-0 z-[100] border-t p-4" style={{ borderColor: '#f1f5f9', background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(12px)' }}>
-          <div className="mx-auto flex max-w-[1120px] items-center gap-3 sm:gap-4">
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[100] border-t p-4"
+          style={{
+            borderColor: 'var(--line)',
+            background: 'color-mix(in srgb, var(--surface) 94%, transparent)',
+            backdropFilter: 'blur(12px)',
+            paddingBottom: 'calc(1rem + var(--safe-bottom))',
+          }}
+        >
+          <div className="mx-auto flex max-w-[1120px] items-center gap-3">
             <div className="hidden sm:block">
-              <b className="text-xl" style={{ color: '#111426' }}>{formatPrice(product.price)}</b>
+              <b className="text-xl" style={{ color: 'var(--ink)' }}>{formatPrice(product.price)}</b>
             </div>
-            <div className="flex items-center gap-2 rounded-2xl p-1.5 sm:gap-3 sm:p-2" style={{ background: '#f8fafc' }}>
-              <button onClick={() => setCount(Math.max(1, count - 1))} className="grid size-8 place-items-center rounded-lg transition hover:bg-white active:scale-90" style={{ color: '#111426' }}>
+            <div className="flex items-center gap-2 rounded-2xl p-1.5" style={{ background: 'var(--surface-2)' }}>
+              <button
+                onClick={() => setCount(Math.max(1, count - 1))}
+                className="grid size-8 place-items-center rounded-lg transition active:scale-90"
+                style={{ color: 'var(--ink)' }}
+                aria-label="-"
+              >
                 <Minus size={18} />
               </button>
-              <b className="w-5 text-center" style={{ color: '#111426' }}>{count}</b>
-              <button onClick={() => setCount(Math.min(maxCount, count + 1))} disabled={count >= maxCount} className="grid size-8 place-items-center rounded-lg transition hover:bg-white active:scale-90 disabled:opacity-40" style={{ color: '#111426' }}>
+              <b className="w-5 text-center" style={{ color: 'var(--ink)' }}>{count}</b>
+              <button
+                onClick={() => setCount(Math.min(maxCount, count + 1))}
+                disabled={count >= maxCount}
+                className="grid size-8 place-items-center rounded-lg transition active:scale-90 disabled:opacity-40"
+                style={{ color: 'var(--ink)' }}
+                aria-label="+"
+              >
                 <Plus size={18} />
               </button>
             </div>
-            <button
-              onClick={handleAddToCart}
-              disabled={soldOut}
-              className="ml-auto flex flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 font-bold shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.98] disabled:hover:translate-y-0 sm:gap-3 sm:py-4"
-              style={
-                soldOut
-                  ? { background: '#e2e8f0', color: '#94a3b8', boxShadow: 'none', cursor: 'not-allowed' }
-                  : { background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: '#fff', boxShadow: '0 8px 24px rgba(109, 40, 217, 0.25)' }
-              }
-            >
+            <button onClick={handleAddToCart} disabled={soldOut} className="btn-primary ml-auto flex-1 py-3.5">
               <ShoppingCart size={20} />
-              <span className="text-sm sm:text-base">{soldOut ? "Sotuvda yo'q" : "Savatchaga qo'shish"}</span>
+              <span className="text-sm sm:text-base">
+                {soldOut ? t('product.soldOut') : t('product.addToCart')}
+              </span>
             </button>
           </div>
         </div>,
-        document.body
+        document.body,
       )}
     </>
   )
