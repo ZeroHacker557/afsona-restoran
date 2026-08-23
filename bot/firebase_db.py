@@ -526,3 +526,93 @@ def get_orders(status: str | None = None, limit: int = 20):
     except Exception as e:
         print(f"[ERR] get_orders: {e}")
         return []
+
+
+# ─── Sotuv hisoboti ───────────────────────────────────────────
+
+def get_sales_report(days: int = 7) -> dict:
+    """
+    Oxirgi N kunlik savdo hisoboti.
+
+    "Yetkazildi" statusidagi buyurtmalar haqiqiy savdo deb hisoblanadi;
+    bekor qilingan va rad etilganlar summaga kirmaydi.
+    """
+    from datetime import timedelta
+
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    report = {
+        "days": days,
+        "orders": 0,
+        "delivered": 0,
+        "cancelled": 0,
+        "pending": 0,
+        "revenue": 0,
+        "avg_check": 0,
+        "top_products": [],
+        "new_customers": 0,
+    }
+
+    try:
+        docs = db.collection("orders").get()
+    except Exception as e:
+        print(f"[ERR] get_sales_report: {e}")
+        return report
+
+    product_counts = {}
+    customers = set()
+    delivered_totals = []
+
+    for doc in docs:
+        d = doc.to_dict() or {}
+
+        created = d.get("createdAt")
+        if not created:
+            continue
+        try:
+            when = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        if when < since:
+            continue
+
+        report["orders"] += 1
+
+        status = d.get("status", "Yangi")
+        if status == "Yetkazildi":
+            report["delivered"] += 1
+            total = d.get("total") or 0
+            if isinstance(total, (int, float)):
+                report["revenue"] += total
+                delivered_totals.append(total)
+        elif status in ("Bekor qilingan", "Rad etildi"):
+            report["cancelled"] += 1
+        else:
+            report["pending"] += 1
+
+        if d.get("userId"):
+            customers.add(d["userId"])
+
+        # Eng ko'p sotilgan mahsulotlar — bekor qilinmaganlar bo'yicha
+        if status not in ("Bekor qilingan", "Rad etildi"):
+            for item in d.get("products", []):
+                prod = item.get("product") or {}
+                name = prod.get("name")
+                if not name:
+                    continue
+                qty = item.get("quantity", 1)
+                entry = product_counts.setdefault(name, {"qty": 0, "sum": 0})
+                entry["qty"] += qty
+                entry["sum"] += (prod.get("price") or 0) * qty
+
+    if delivered_totals:
+        report["avg_check"] = round(sum(delivered_totals) / len(delivered_totals))
+
+    report["new_customers"] = len(customers)
+    report["top_products"] = sorted(
+        ({"name": k, **v} for k, v in product_counts.items()),
+        key=lambda x: x["qty"],
+        reverse=True,
+    )[:5]
+
+    return report
