@@ -139,6 +139,95 @@ def get_products_text(products: list) -> str:
     return lines
 
 
+# Telegram rasm izohi (caption) uchun chegara
+CAPTION_LIMIT = 1024
+
+
+def current_caption(msg) -> str:
+    """Rasmli xabarning HTML izohi (formatlash saqlanadi)."""
+    try:
+        return msg.html_text or ""
+    except Exception:
+        return msg.caption or ""
+
+
+def build_receipt_caption(order: dict | None, display_id: str) -> str:
+    """
+    Adminga yuboriladigan chek izohi: mijoz ma'lumotlari, mahsulotlar
+    (rang va o'lcham bilan) hamda to'liq hisob-kitob.
+
+    Telegram izohni 1024 belgi bilan cheklaydi — sig'masa mahsulotlar
+    ro'yxati qisqartiriladi, mijoz ma'lumotlari esa doim to'liq qoladi.
+    """
+    head = "💳 <b>TO'LOV CHEKI</b>\n" + "━" * 22 + "\n\n"
+    head += f"🧾 <b>Buyurtma:</b> {display_id}\n"
+
+    if not order:
+        return head + "\n⚠️ Buyurtma ma'lumotlari topilmadi."
+
+    customer = order.get("customer", {})
+    head += f"📅 {db.order_date_text(order)}\n\n"
+    head += f"👤 <b>Ism:</b> {customer.get('name', '—')}\n"
+    head += f"📱 <b>Telegram:</b> {get_display_name(order)}\n"
+    head += f"📞 <b>Tel:</b> <code>{customer.get('phone', '—')}</code>\n"
+    head += f"📍 <b>Manzil:</b> {customer.get('address', '—')}\n"
+    if customer.get("comment"):
+        head += f"💬 <b>Izoh:</b> {customer['comment']}\n"
+
+    # ── Hisob-kitob ──
+    tail = "\n" + "━" * 22 + "\n"
+    subtotal = order.get("subtotal")
+    discount = order.get("discount") or 0
+    delivery_fee = order.get("deliveryFee") or 0
+    if isinstance(subtotal, (int, float)) and (discount or delivery_fee):
+        tail += f"🧾 Mahsulotlar: {db.format_price(subtotal)}\n"
+        if discount:
+            promo = order.get("promoCode")
+            promo_text = f" ({promo})" if promo else ""
+            tail += f"🏷 Chegirma{promo_text}: -{db.format_price(discount)}\n"
+        if delivery_fee:
+            tail += f"🚚 Yetkazish: {db.format_price(delivery_fee)}\n"
+        else:
+            tail += "🚚 Yetkazish: bepul\n"
+
+    total = order.get("total", 0)
+    total_str = db.format_price(total) if isinstance(total, (int, float)) else str(total)
+    tail += f"💰 <b>To'langan summa: {total_str}</b>"
+
+    # ── Mahsulotlar ──
+    products = order.get("products", [])
+    lines = []
+    for i, item in enumerate(products, 1):
+        qty = item.get("quantity", 1)
+        prod = item.get("product") or item
+        name = prod.get("name", "—")
+        price = prod.get("price", 0)
+
+        variant = []
+        if item.get("size"):
+            variant.append(f"O'lcham: {item['size']}")
+        if item.get("color"):
+            variant.append(f"Rang: {item['color']}")
+        var_text = f" ({', '.join(variant)})" if variant else ""
+
+        lines.append(
+            f"  <b>{i}. {name}</b>{var_text}\n"
+            f"     └ {qty} ta × {db.format_price(price)} = <b>{db.format_price(price * qty)}</b>\n"
+        )
+
+    body_header = "\n📦 <b>Mahsulotlar:</b>\n"
+    shown = list(lines)
+    while shown:
+        hidden = len(lines) - len(shown)
+        more = f"  <i>...va yana {hidden} ta mahsulot</i>\n" if hidden else ""
+        caption = head + body_header + "".join(shown) + more + tail
+        if len(caption) <= CAPTION_LIMIT:
+            return caption
+        shown.pop()
+
+    return head + body_header + f"  <i>{len(lines)} ta mahsulot</i>\n" + tail
+
+
 # ─── Yangi buyurtma: Admin + User bildirishnomasi ─────────────
 
 async def notify_admin_order(order_data: dict):
@@ -309,14 +398,7 @@ async def handle_receipt_photo(message: Message, state: FSMContext):
 
     order   = db.get_order_by_id(order_id) if order_id != "—" else None
     display_id = db.order_display_id(order) if order else order_id
-    caption = "💳 <b>TO'LOV CHEKI!</b>\n" + "━" * 22 + "\n\n"
-    caption += f"📦 Buyurtma: <b>{display_id}</b>\n"
-    if order:
-        caption += f"📱 Mijoz: {get_display_name(order)}\n"
-        caption += f"📞 Tel: <code>{order.get('customer', {}).get('phone', '—')}</code>\n"
-        tot = order.get("total", 0)
-        caption += f"💰 Summa: <b>{db.format_price(tot) if isinstance(tot,(int,float)) else tot}</b>\n"
-    caption += "━" * 22
+    caption = build_receipt_caption(order, display_id)
 
     try:
         for admin_id in ADMIN_IDS:
@@ -348,6 +430,7 @@ async def handle_receipt_wrong(message: Message):
 @dp.callback_query(F.data.startswith("pconf:"))
 async def cb_payment_confirm(callback: CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Sizda ruxsat yo'q", show_alert=True)
         return
 
     parts    = callback.data.split(":")
@@ -358,73 +441,54 @@ async def cb_payment_confirm(callback: CallbackQuery):
     order      = db.get_order_by_id(order_id)
     display_id = db.order_display_id(order) if order else order_id
 
-    if action == "ok":
-        db.update_payment_status(order_id, "Tolangan")
-        logger.info(f"[PAY] Tasdiqlandi: {order_id}")
-
-        # Usergа xabar
+    # Ikkinchi admin ham xuddi shu chekni olgan bo'ladi. U kechroq
+    # tugma bossa, mijozga takroriy xabar ketmasligi kerak.
+    current = (order or {}).get("paymentStatus")
+    if current in ("Tolangan", "Rad etildi"):
+        already = "tasdiqlangan" if current == "Tolangan" else "rad etilgan"
         try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await callback.answer(f"Bu chek allaqachon {already}", show_alert=True)
+        return
+
+    approved = action == "ok"
+    db.update_payment_status(order_id, "Tolangan" if approved else "Rad etildi")
+    logger.info(f"[PAY] {'Tasdiqlandi' if approved else 'Rad etildi'}: {order_id}")
+
+    # ── Mijozga xabar (bitta, faqat bir marta) ──
+    try:
+        if approved:
             u_text  = "✅ <b>To'lovingiz tasdiqlandi!</b>\n"
             u_text += "━" * 22 + "\n\n"
-            u_text += f"📦 Buyurtma: <b>{display_id}</b>\n"
+            u_text += f"🧾 Buyurtma: <b>{display_id}</b>\n"
             u_text += "💰 To'lov qabul qilindi! Tez orada yetkaziladi 🚀"
             await bot.send_message(user_id, u_text, reply_markup=mini_app_kb())
-        except Exception as e:
-            logger.warning(f"[PAY] User xabari: {e}")
-
-        # Chek xabarini yangilash
-        try:
-            await callback.message.edit_caption(
-                (callback.message.caption or "") + "\n\n✅ <b>TASDIQLANDI</b>"
-            )
-        except Exception:
-            pass
-
-        # Barcha adminlarga status tugmalarini yuborish
-        for admin_id in ADMIN_IDS:
-            try:
-                await bot.send_message(
-                    admin_id,
-                    f"📦 <b>{display_id}</b> — to'lov tasdiqlandi ✅\nBuyurtma statusini o'zgartiring:",
-                    reply_markup=order_action_kb(order_id)
-                )
-            except Exception:
-                pass
-        await callback.answer("✅ Tasdiqlandi!", show_alert=True)
-
-    elif action == "no":
-        db.update_payment_status(order_id, "Rad etildi")
-        logger.info(f"[PAY] Rad etildi: {order_id}")
-
-        # Usergа xabar
-        try:
+        else:
             u_text  = "❌ <b>To'lov cheki rad etildi</b>\n"
             u_text += "━" * 22 + "\n\n"
-            u_text += f"📦 Buyurtma: <b>{display_id}</b>\n"
+            u_text += f"🧾 Buyurtma: <b>{display_id}</b>\n"
             u_text += "Iltimos, to'g'ri chekni qayta yuboring."
             await bot.send_message(user_id, u_text, reply_markup=resend_receipt_kb(order_id))
-        except Exception as e:
-            logger.warning(f"[PAY] User xabari: {e}")
+    except Exception as e:
+        logger.warning(f"[PAY] Mijozga xabar yuborilmadi: {e}")
 
-        # Chek xabarini yangilash
-        try:
-            await callback.message.edit_caption(
-                (callback.message.caption or "") + "\n\n❌ <b>RAD ETILDI</b>"
-            )
-        except Exception:
-            pass
+    # ── Chek xabarini SHU YERNING O'ZIDA yangilaymiz ──
+    # Ilgari bu yerda har bir adminga alohida "statusni o'zgartiring"
+    # xabari yuborilardi. Natijada tasdiqlashdan keyin ortiqcha xabarlar
+    # to'planib qolardi, holbuki status tugmalari shu xabarga sig'adi.
+    mark = "✅ <b>TO'LOV TASDIQLANDI</b>" if approved else "❌ <b>CHEK RAD ETILDI</b>"
+    hint = "Endi buyurtma holatini belgilang 👇" if approved else "Mijoz yangi chek yuborishi kutilmoqda."
+    try:
+        await callback.message.edit_caption(
+            caption=current_caption(callback.message) + f"\n\n{mark}\n{hint}",
+            reply_markup=order_action_kb(order_id) if approved else None,
+        )
+    except Exception as e:
+        logger.warning(f"[PAY] Chek xabarini yangilab bo'lmadi: {e}")
 
-        # Barcha adminlarga status tugmalarini yuborish
-        for admin_id in ADMIN_IDS:
-            try:
-                await bot.send_message(
-                    admin_id,
-                    f"📦 <b>{display_id}</b> — chek rad etildi ❌ (mijoz qayta yuboradi)\nBuyurtma statusini o'zgartiring:",
-                    reply_markup=order_action_kb(order_id)
-                )
-            except Exception:
-                pass
-        await callback.answer("❌ Rad etildi!", show_alert=True)
+    await callback.answer("✅ Tasdiqlandi" if approved else "❌ Rad etildi")
 
 
 # ─── Buyurtmalarim ───────────────────────────────────────────
