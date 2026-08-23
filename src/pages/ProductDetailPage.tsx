@@ -26,6 +26,9 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
   const [selectedColor, setSelectedColor] = useState(colorsList[0] || '')
   const favourite = likedIds.includes(product.id)
   const images = product.images || []
+  const stock = product.stock
+  const soldOut = stock === 0
+  const lowStock = typeof stock === 'number' && stock > 0 && stock <= 5
 
   // Reviews state
   const [reviews, setReviews] = useState<Review[]>([])
@@ -74,9 +77,13 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
   }
 
   const handleAddToCart = () => {
+    if (soldOut) return
     for (let i = 0; i < count; i++) onAddToCart(product, selectedSize, selectedColor)
     setCount(1)
   }
+
+  // Omborda bor miqdordan ortiq tanlab bo'lmaydi
+  const maxCount = typeof stock === 'number' && stock > 0 ? Math.min(stock, 99) : 99
 
   return (
     <>
@@ -140,6 +147,17 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
           <strong className="text-3xl" style={{ color: '#111426' }}>{formatPrice(product.price)}</strong>
           {product.oldPrice && <del style={{ color: '#94a3b8' }}>{formatPrice(product.oldPrice)}</del>}
         </div>
+
+        {soldOut && (
+          <p className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold" style={{ background: '#f1f5f9', color: '#64748b' }}>
+            Hozircha sotuvda yo&rsquo;q
+          </p>
+        )}
+        {lowStock && (
+          <p className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold" style={{ background: '#fff7ed', color: '#c2410c' }}>
+            Omborda {stock} ta qoldi
+          </p>
+        )}
 
         {/* Colors */}
         {colorsList.length > 0 && (
@@ -275,17 +293,22 @@ export function ProductDetailPage({ product, onAddToCart, onBack, likedIds, onTo
                 <Minus size={18} />
               </button>
               <b className="w-5 text-center" style={{ color: '#111426' }}>{count}</b>
-              <button onClick={() => setCount(count + 1)} className="grid size-8 place-items-center rounded-lg transition hover:bg-white active:scale-90" style={{ color: '#111426' }}>
+              <button onClick={() => setCount(Math.min(maxCount, count + 1))} disabled={count >= maxCount} className="grid size-8 place-items-center rounded-lg transition hover:bg-white active:scale-90 disabled:opacity-40" style={{ color: '#111426' }}>
                 <Plus size={18} />
               </button>
             </div>
             <button
               onClick={handleAddToCart}
-              className="ml-auto flex flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 font-bold shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.98] sm:gap-3 sm:py-4"
-              style={{ background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: '#fff', boxShadow: '0 8px 24px rgba(109, 40, 217, 0.25)' }}
+              disabled={soldOut}
+              className="ml-auto flex flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 font-bold shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.98] disabled:hover:translate-y-0 sm:gap-3 sm:py-4"
+              style={
+                soldOut
+                  ? { background: '#e2e8f0', color: '#94a3b8', boxShadow: 'none', cursor: 'not-allowed' }
+                  : { background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', color: '#fff', boxShadow: '0 8px 24px rgba(109, 40, 217, 0.25)' }
+              }
             >
               <ShoppingCart size={20} />
-              <span className="text-sm sm:text-base">Savatchaga qo'shish</span>
+              <span className="text-sm sm:text-base">{soldOut ? "Sotuvda yo'q" : "Savatchaga qo'shish"}</span>
             </button>
           </div>
         </div>,

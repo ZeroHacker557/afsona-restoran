@@ -117,6 +117,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userRef = db.collection('users').doc(uid)
       const userSnap = await tx.get(userRef)
 
+      const deliveryRef = db.collection('settings').doc('delivery')
+      const deliverySnap = await tx.get(deliveryRef)
+
       let promoRef: FirebaseFirestore.DocumentReference | null = null
       let promoData: FirebaseFirestore.DocumentData | null = null
       if (order.promoCode) {
@@ -128,7 +131,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         promoData = promoQuery.docs[0].data()
       }
 
-      // ── 2. Narxni qayta hisoblash ──────────────────────────
+      // ── 2. Narx va ombor qoldig'ini tekshirish ─────────────
+      // Bir mahsulot savatda bir necha variant (o'lcham/rang) bilan
+      // turishi mumkin — qoldiqni umumiy miqdor bo'yicha tekshiramiz.
+      const requestedByProduct = new Map<string, number>()
+      order.items.forEach((item) => {
+        const key = String(item.productId)
+        requestedByProduct.set(key, (requestedByProduct.get(key) || 0) + item.quantity)
+      })
+
+      const stockUpdates: { ref: FirebaseFirestore.DocumentReference; stock: number }[] = []
+      const seenProducts = new Set<string>()
+
       const products = order.items.map((item, i) => {
         const snap = productSnaps[i]
         if (!snap.exists) throw new Error('PRODUCT_GONE')
@@ -136,6 +150,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const price = Number(data.price)
         if (!Number.isFinite(price) || price <= 0) throw new Error('PRODUCT_PRICE')
+
+        const key = String(item.productId)
+        if (!seenProducts.has(key) && typeof data.stock === 'number') {
+          seenProducts.add(key)
+          const requested = requestedByProduct.get(key) || 0
+          if (data.stock < requested) {
+            throw new Error(data.stock <= 0 ? 'OUT_OF_STOCK' : 'NOT_ENOUGH_STOCK')
+          }
+          stockUpdates.push({ ref: snap.ref, stock: data.stock - requested })
+        }
 
         return {
           product: {
@@ -180,9 +204,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const discount = Math.round((subtotal * discountPercent) / 100)
-      const total = Math.max(subtotal - discount, 0)
+      const discountedSubtotal = Math.max(subtotal - discount, 0)
 
-      // ── 4. Yozishlar ───────────────────────────────────────
+      // ── 4. Yetkazib berish narxi ───────────────────────────
+      const delivery = deliverySnap.exists ? deliverySnap.data() : null
+      const deliveryFee = Math.max(Number(delivery?.fee) || 0, 0)
+      const freeFrom = Math.max(Number(delivery?.freeFrom) || 0, 0)
+      const appliedDelivery = freeFrom > 0 && discountedSubtotal >= freeFrom ? 0 : deliveryFee
+
+      const total = discountedSubtotal + appliedDelivery
+
+      // ── 5. Yozishlar ───────────────────────────────────────
       const currentCounter = counterSnap.exists
         ? Number(counterSnap.data()?.value) || ORDER_NUMBER_START
         : ORDER_NUMBER_START
@@ -197,6 +229,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
       }
 
+      // Ombor qoldig'ini kamaytiramiz — buyurtma bilan bir transactionda
+      stockUpdates.forEach(({ ref, stock }) => tx.update(ref, { stock }))
+
       const userData = userSnap.data() || {}
       const orderRef = db.collection('orders').doc()
 
@@ -208,6 +243,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         discount,
         discountPercent,
         promoCode: appliedPromo,
+        deliveryFee: appliedDelivery,
         total,
         status: 'Yangi',
         paymentMethod: order.customer.paymentMethod,
@@ -218,7 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         notified: false,
       })
 
-      return { id: orderRef.id, orderNumber: `#${nextCounter}`, total, discount }
+      return { id: orderRef.id, orderNumber: `#${nextCounter}`, total, discount, deliveryFee: appliedDelivery }
     })
 
     return res.status(200).json(result)
@@ -233,6 +269,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       PROMO_USED_UP: 'Promokoddan foydalanish chegarasi tugagan',
       PROMO_ALREADY_USED: 'Siz bu promokoddan allaqachon foydalangansiz',
       PROMO_MIN_TOTAL: 'Bu promokod uchun buyurtma summasi yetarli emas',
+      OUT_OF_STOCK: 'Savatdagi mahsulotlardan biri sotuvda qolmadi',
+      NOT_ENOUGH_STOCK: 'Omborda yetarli miqdor yo‘q, savatdagi sonni kamaytiring',
     }
     if (messages[code]) return fail(res, 400, messages[code])
 

@@ -59,6 +59,15 @@ def main_kb(is_admin: bool = False):
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
+def contact_kb() -> ReplyKeyboardMarkup:
+    """Telefon raqamini bir bosishda olish uchun (F-26)."""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Raqamni yuborish", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
 def order_action_kb(order_id: str) -> InlineKeyboardMarkup:
     """Admin uchun 4ta status tugmasi"""
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -166,6 +175,21 @@ async def notify_admin_order(order_data: dict):
         text += f"\n💳 <b>To'lov:</b> {pay_label}\n"
         text += f"\n📦 <b>Mahsulotlar:</b>\n{get_products_text(products)}"
         text += "━" * 22 + "\n"
+
+        subtotal = order_data.get("subtotal")
+        discount = order_data.get("discount") or 0
+        delivery_fee = order_data.get("deliveryFee") or 0
+        if isinstance(subtotal, (int, float)) and (discount or delivery_fee):
+            text += f"🧾 Mahsulotlar: {db.format_price(subtotal)}\n"
+            if discount:
+                promo = order_data.get("promoCode")
+                promo_text = f" ({promo})" if promo else ""
+                text += f"🏷 Chegirma{promo_text}: -{db.format_price(discount)}\n"
+            if delivery_fee:
+                text += f"🚚 Yetkazib berish: {db.format_price(delivery_fee)}\n"
+            else:
+                text += "🚚 Yetkazib berish: bepul\n"
+
         text += f"💰 <b>Jami: {total_str}</b>\n"
         text += "⏰ <b>Status:</b> 🟡 Yangi"
         if pay_method == "Karta":
@@ -546,6 +570,50 @@ async def cmd_start(message: Message, state: FSMContext):
     )
     await message.answer(text, reply_markup=main_kb(is_admin))
 
+    # Telefon raqami hali saqlanmagan bo'lsa, bir bosishda so'raymiz.
+    # Mini app buni buyurtma formasiga avtomatik qo'yadi (F-26).
+    saved = db.get_user(user.id) or {}
+    if not saved.get("phone"):
+        await message.answer(
+            "📱 <b>Telefon raqamingizni qoldiring</b>\n\n"
+            "Buyurtma berganingizda uni qayta yozib o'tirmaysiz, "
+            "kuryer esa siz bilan tez bog'lana oladi.\n\n"
+            "<i>Ixtiyoriy — keyinroq ilovaning «Shaxsiy ma'lumotlar» "
+            "bo'limidan ham kiritish mumkin.</i>",
+            reply_markup=contact_kb(),
+        )
+
+
+@dp.message(F.contact)
+async def handle_contact(message: Message):
+    """Foydalanuvchi «Raqamni yuborish» tugmasini bosganda (F-26)."""
+    contact = message.contact
+
+    # Faqat o'z raqamini qabul qilamiz — boshqa odamning kontaktini emas
+    if contact.user_id != message.from_user.id:
+        await message.answer(
+            "❌ Iltimos, <b>o'zingizning</b> raqamingizni yuboring.",
+            reply_markup=contact_kb(),
+        )
+        return
+
+    is_admin = message.from_user.id in ADMIN_IDS
+    phone = contact.phone_number
+    if not phone.startswith("+"):
+        phone = f"+{phone}"
+
+    if db.set_user_phone(message.from_user.id, phone):
+        await message.answer(
+            f"✅ Raqamingiz saqlandi: <code>{phone}</code>\n\n"
+            "Endi buyurtma berishda u avtomatik to'ldiriladi.",
+            reply_markup=main_kb(is_admin),
+        )
+    else:
+        await message.answer(
+            "❌ Raqamni saqlab bo'lmadi. Keyinroq qayta urinib ko'ring.",
+            reply_markup=main_kb(is_admin),
+        )
+
 
 @dp.message(F.text == "🛠 Admin Panel")
 async def handle_admin_btn(message: Message, state: FSMContext):
@@ -602,8 +670,9 @@ async def handle_webapp_data(message: Message):
 # ─── Main ─────────────────────────────────────────────────────
 
 async def main():
-    # Karta ma'lumoti hali Firestore'da bo'lmasa, config.py dan ko'chiriladi
+    # Sozlama hujjatlari hali yo'q bo'lsa, boshlang'ich qiymatlar bilan yaratamiz
     db.ensure_payment_settings()
+    db.ensure_delivery_settings()
 
     try:
         await bot.set_chat_menu_button(

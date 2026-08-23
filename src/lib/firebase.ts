@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { parseDate } from '../utils/date'
-import type { Product, Category, Order, PaymentSettings, Notification } from '../types/domain'
+import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notification } from '../types/domain'
 
 const firebaseConfig = {
   apiKey: "AIzaSyB-JENf9xTOJcEF81-6KJxb0HnCyLmjkc0",
@@ -42,7 +42,8 @@ export function subscribeToProducts(callback: (products: Product[]) => void, onE
         sizes: data.sizes || [],
         color: data.color || '',
         description: data.description || '',
-        discount: data.discount || ''
+        discount: data.discount || '',
+        stock: typeof data.stock === 'number' ? data.stock : undefined
       }
     })
     callback(products)
@@ -98,6 +99,24 @@ function hashString(str: string): number {
 const PAYMENT_FALLBACK: PaymentSettings = {
   cardNumber: '',
   cardOwner: '',
+}
+
+const DELIVERY_FALLBACK: DeliverySettings = { fee: 0, freeFrom: 0 }
+
+/** Yetkazib berish narxi — settings/delivery hujjatidan. */
+export async function getDeliverySettings(): Promise<DeliverySettings> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'delivery'))
+    if (!snap.exists()) return DELIVERY_FALLBACK
+    const data = snap.data()
+    return {
+      fee: Math.max(Number(data.fee) || 0, 0),
+      freeFrom: Math.max(Number(data.freeFrom) || 0, 0),
+    }
+  } catch (error) {
+    console.error("[Firebase] Yetkazish sozlamalarini o'qib bo'lmadi:", error)
+    return DELIVERY_FALLBACK
+  }
 }
 
 /** Karta ma'lumoti yagona manbadan — settings/payment hujjatidan (F-07). */

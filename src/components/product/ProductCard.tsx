@@ -10,6 +10,8 @@ export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLi
   const favourite = likedIds.includes(product.id)
   const imgSrc = product.images?.[0] ? getImageUrl(product.images[0]) : ''
   const [imgError, setImgError] = useState(false)
+  // stock undefined bo'lsa ombor hisobi yuritilmaydi (eski mahsulotlar)
+  const soldOut = product.stock === 0
 
   const imageHeight = compact ? 'h-36' : 'h-48 sm:h-56'
 
@@ -26,16 +28,22 @@ export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLi
       </button>
 
       {/* Discount Badge */}
-      {product.discount && (
+      {!soldOut && product.discount && (
         <span className="product-card-badge">
           {product.discount}
+        </span>
+      )}
+
+      {soldOut && (
+        <span className="product-card-badge" style={{ background: '#64748b' }}>
+          Sotuvda yo&rsquo;q
         </span>
       )}
 
       {/* Clickable Area: Image + Info */}
       <button className="product-card-body" onClick={() => onOpen(product)}>
         {/* Image Container - always takes fixed space */}
-        <div className={`product-card-image ${imageHeight}`}>
+        <div className={`product-card-image ${imageHeight}`} style={soldOut ? { opacity: 0.45 } : undefined}>
           {imgSrc && !imgError ? (
             <img
               className="product-card-img"
@@ -72,8 +80,10 @@ export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLi
         </div>
         <button
           className="add-button"
+          disabled={soldOut}
           onClick={(e) => { e.stopPropagation(); onAddToCart(product) }}
-          aria-label="Savatchaga qo'shish"
+          aria-label={soldOut ? "Sotuvda yo'q" : "Savatchaga qo'shish"}
+          style={soldOut ? { background: '#e2e8f0', color: '#94a3b8', cursor: 'not-allowed' } : undefined}
         >
           <ShoppingCart size={18} />
         </button>

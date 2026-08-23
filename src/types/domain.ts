@@ -14,6 +14,8 @@ export type Product = {
   description?: string
   discount?: string
   sizes?: string[]
+  /** Ombordagi qoldiq. undefined — hisob yuritilmaydi (eski mahsulotlar). */
+  stock?: number
 }
 
 export type Category = {
@@ -33,6 +35,13 @@ export type Order = {
   /** ISO 8601. Saralash va sana ko'rsatish shu maydondan. */
   createdAt: string
   products: { product: Product; quantity: number; size?: string; color?: string; cartKey?: string }[]
+  /** Mahsulotlar jami (chegirmasiz, yetkazishsiz). */
+  subtotal?: number
+  discount?: number
+  discountPercent?: number
+  promoCode?: string | null
+  deliveryFee?: number
+  /** Yakuniy summa: subtotal - discount + deliveryFee. */
   total: number
   status: OrderStatus
   paymentMethod?: 'Naqd' | 'Karta'
@@ -52,6 +61,13 @@ export type NewOrder = Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'notifie
 export type PaymentSettings = {
   cardNumber: string
   cardOwner: string
+}
+
+export type DeliverySettings = {
+  /** Yetkazib berish narxi, so'mda. */
+  fee: number
+  /** Shu summadan yuqori buyurtmalar bepul yetkaziladi. 0 — bepul yetkazish yo'q. */
+  freeFrom: number
 }
 
 export type OrderForm = {

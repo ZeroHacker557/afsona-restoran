@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, Check, MapPin, MessageSquare, Phone, Send, ShoppingBag, User, CreditCard, Banknote, Tag, Loader2 } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl, hapticFeedback } from '../utils/telegram'
-import { getPaymentSettings } from '../lib/firebase'
+import { getPaymentSettings, getDeliverySettings } from '../lib/firebase'
 import { apiPost, ApiError } from '../lib/api'
-import type { OrderForm, PaymentSettings, Product } from '../types/domain'
+import type { DeliverySettings, OrderForm, PaymentSettings, Product } from '../types/domain'
 import L from 'leaflet'
 
 // Fix Leaflet default icon issue
@@ -44,6 +44,7 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
   const [promoError, setPromoError] = useState('')
   const [payment, setPayment] = useState<PaymentSettings | null>(null)
+  const [delivery, setDelivery] = useState<DeliverySettings | null>(null)
   const addresses = profile?.addresses || []
 
   // Karta ma'lumoti yagona manbadan — settings/payment (F-07)
@@ -52,12 +53,20 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
     getPaymentSettings().then((settings) => {
       if (alive) setPayment(settings)
     })
+    getDeliverySettings().then((settings) => {
+      if (alive) setDelivery(settings)
+    })
     return () => { alive = false }
   }, [])
 
-  // Chegirmani server hisoblaydi — bu faqat ko'rsatish uchun (F-04)
+  // Chegirma va yetkazish narxini server hisoblaydi — bu faqat ko'rsatish uchun (F-04)
   const discount = appliedPromo?.discount ?? 0
-  const finalTotal = Math.max(cartTotal - discount, 0)
+  const discountedSubtotal = Math.max(cartTotal - discount, 0)
+  const deliveryFee =
+    delivery === null || (delivery.freeFrom > 0 && discountedSubtotal >= delivery.freeFrom)
+      ? 0
+      : delivery.fee
+  const finalTotal = discountedSubtotal + deliveryFee
 
   // Avtomatik to'ldirish
   if (!orderForm.name && profile?.first_name) {
@@ -192,13 +201,42 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
               )}
             </div>
 
-            <div className="flex justify-between items-center">
-              <span className="font-bold" style={{ color: '#111426' }}>Jami:</span>
-              <div className="text-right">
-                {appliedPromo && (
-                  <b className="text-sm line-through block" style={{ color: '#94a3b8' }}>{formatPrice(cartTotal)}</b>
+            {/* Hisob-kitob */}
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span style={{ color: '#64748b' }}>Mahsulotlar</span>
+                <span className="font-bold" style={{ color: '#111426' }}>{formatPrice(cartTotal)}</span>
+              </div>
+
+              {discount > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: '#64748b' }}>
+                    Chegirma {appliedPromo ? `(${appliedPromo.discountPercent}%)` : ''}
+                  </span>
+                  <span className="font-bold" style={{ color: '#10b981' }}>-{formatPrice(discount)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                <span style={{ color: '#64748b' }}>Yetkazib berish</span>
+                {delivery === null ? (
+                  <span className="h-4 w-16 animate-pulse rounded" style={{ background: '#e2e8f0' }} />
+                ) : deliveryFee === 0 ? (
+                  <span className="font-bold" style={{ color: '#10b981' }}>Bepul</span>
+                ) : (
+                  <span className="font-bold" style={{ color: '#111426' }}>{formatPrice(deliveryFee)}</span>
                 )}
-                <b className="text-lg" style={{ color: appliedPromo ? '#10b981' : '#7c3aed' }}>{formatPrice(finalTotal)}</b>
+              </div>
+
+              {delivery !== null && delivery.freeFrom > 0 && deliveryFee > 0 && (
+                <p className="pt-1 text-[11px]" style={{ color: '#94a3b8' }}>
+                  {formatPrice(delivery.freeFrom)}dan yuqori buyurtmalar bepul yetkaziladi
+                </p>
+              )}
+
+              <div className="flex items-center justify-between border-t pt-2.5" style={{ borderColor: '#f1f5f9' }}>
+                <span className="font-bold" style={{ color: '#111426' }}>Jami:</span>
+                <b className="text-lg" style={{ color: '#7c3aed' }}>{formatPrice(finalTotal)}</b>
               </div>
             </div>
           </div>

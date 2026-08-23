@@ -110,12 +110,28 @@ def add_product(data: dict):
         "sizes": data.get("sizes", []),
         "color": data.get("color", ""),
         "description": data.get("description", ""),
-        "discount": data.get("discount", "")
+        "discount": data.get("discount", ""),
+        # Ombor qoldig'i. Buyurtma berilganda server kamaytiradi.
+        "stock": int(data.get("stock", 0) or 0),
     }
 
     db.collection("products").document(product_id).set(product_data)
     print(f"[OK] Firebase: Mahsulot saqlandi ({product_data['name']})")
     return product_data
+
+
+def update_product(prod_id: str | int, updates: dict) -> bool:
+    """Mahsulotning ayrim maydonlarini yangilaydi (narx, nom, qoldiq...)."""
+    try:
+        ref = db.collection("products").document(str(prod_id))
+        if not ref.get().exists:
+            return False
+        ref.update(updates)
+        print(f"[OK] Firebase: Mahsulot yangilandi ({prod_id}): {list(updates)}")
+        return True
+    except Exception as e:
+        print(f"[ERR] update_product: {e}")
+        return False
 
 
 def delete_product(prod_id: str | int):
@@ -338,6 +354,28 @@ def listen_to_new_orders(callback):
 
 # ─── Users ────────────────────────────────────────────────────
 
+def get_user(user_id: int) -> dict | None:
+    try:
+        snap = db.collection("users").document(str(user_id)).get()
+        return snap.to_dict() if snap.exists else None
+    except Exception as e:
+        print(f"[ERR] get_user: {e}")
+        return None
+
+
+def set_user_phone(user_id: int, phone: str):
+    """Telefon raqamini saqlaydi — mini app uni avtomatik to'ldiradi (F-26)."""
+    try:
+        db.collection("users").document(str(user_id)).set(
+            {"id": user_id, "phone": phone}, merge=True
+        )
+        print(f"[OK] Telefon saqlandi: {user_id}")
+        return True
+    except Exception as e:
+        print(f"[ERR] set_user_phone: {e}")
+        return False
+
+
 def get_all_users():
     docs = db.collection("users").get()
     users = []
@@ -415,3 +453,62 @@ def ensure_payment_settings():
             print("[OK] settings/payment yaratildi")
     except Exception as e:
         print(f"[ERR] ensure_payment_settings: {e}")
+
+
+def update_payment_settings(card_number: str, card_owner: str):
+    db.collection("settings").document("payment").set(
+        {"cardNumber": card_number, "cardOwner": card_owner}, merge=True
+    )
+
+
+# ─── Delivery settings ────────────────────────────────────────
+
+def get_delivery_settings() -> dict:
+    try:
+        snap = db.collection("settings").document("delivery").get()
+        if snap.exists:
+            data = snap.to_dict() or {}
+            return {
+                "fee": max(int(data.get("fee") or 0), 0),
+                "freeFrom": max(int(data.get("freeFrom") or 0), 0),
+            }
+    except Exception as e:
+        print(f"[ERR] get_delivery_settings: {e}")
+    return {"fee": 0, "freeFrom": 0}
+
+
+def ensure_delivery_settings():
+    try:
+        ref = db.collection("settings").document("delivery")
+        if not ref.get().exists:
+            ref.set({"fee": 0, "freeFrom": 0})
+            print("[OK] settings/delivery yaratildi")
+    except Exception as e:
+        print(f"[ERR] ensure_delivery_settings: {e}")
+
+
+def update_delivery_settings(fee: int, free_from: int):
+    db.collection("settings").document("delivery").set(
+        {"fee": int(fee), "freeFrom": int(free_from)}, merge=True
+    )
+
+
+# ─── Orders list (admin) ──────────────────────────────────────
+
+def get_orders(status: str | None = None, limit: int = 20):
+    """Buyurtmalar ro'yxati, yangisidan eskisiga."""
+    try:
+        query = db.collection("orders")
+        if status:
+            query = query.where("status", "==", status)
+        docs = query.get()
+        orders = []
+        for doc in docs:
+            d = doc.to_dict()
+            d["_doc_id"] = doc.id
+            orders.append(d)
+        orders.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+        return orders[:limit]
+    except Exception as e:
+        print(f"[ERR] get_orders: {e}")
+        return []
