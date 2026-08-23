@@ -167,47 +167,6 @@ export function initTelegram() {
   tg.enableClosingConfirmation?.()
 }
 
-// ── Tema ─────────────────────────────────────────────────────
-
-function readToken(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-}
-
-/**
- * Telegram temasiga moslashtiramiz.
- *
- * Telegram'ning o'z ranglarini ko'chirib olmaymiz — ular do'kon brendi
- * bilan urishib qolishi mumkin. O'rniga faqat YORUG'/QORONG'I tanlovini
- * olamiz va o'zimizning palitrani qo'llaymiz, so'ng Telegram paneli
- * ranglarini ilova foniga moslaymiz. Natijada yaxlit ko'rinish chiqadi.
- */
-export function applyTelegramTheme() {
-  const tg = getTelegram()
-  const root = document.documentElement
-
-  // MUHIM: telegram-web-app.js Telegram TASHQARISIDA ham yuklanadi va
-  // colorScheme'ni har doim 'light' deb qaytaradi. Shunga ishonsak,
-  // brauzerda tizim qorong'i rejimi e'tiborsiz qolib ketadi. Shuning
-  // uchun bu qiymatni faqat haqiqatan Telegram ichida bo'lsak olamiz.
-  if (isTelegramEnvironment() && tg?.colorScheme) {
-    root.setAttribute('data-theme', tg.colorScheme)
-  } else {
-    // Tashqarida tanlovni tizimga qoldiramiz (prefers-color-scheme)
-    root.removeAttribute('data-theme')
-  }
-
-  // Tokenlar qo'llanib bo'lgach panel ranglarini olamiz
-  requestAnimationFrame(() => {
-    const surface = readToken('--surface')
-    const bg = readToken('--bg')
-    if (surface) tg?.setHeaderColor?.(surface)
-    if (bg) {
-      tg?.setBackgroundColor?.(bg)
-      tg?.setBottomBarColor?.(bg)
-    }
-  })
-}
-
 /** Telegram xavfsiz zonasini CSS o'zgaruvchilariga yozamiz. */
 export function applySafeArea() {
   const tg = getTelegram()
@@ -222,34 +181,24 @@ export function applySafeArea() {
   root.style.setProperty('--safe-top', `${top}px`)
 }
 
-/** Tema va o'lcham o'zgarishlarini kuzatamiz. */
-export function watchTelegramAppearance(): () => void {
+/**
+ * Ekran o'lchami o'zgarishini kuzatamiz (klaviatura ochilishi, aylantirish).
+ * Tema bu yerda emas — u foydalanuvchi tanlovi, utils/theme.ts da.
+ */
+export function watchSafeArea(): () => void {
   const tg = getTelegram()
-
-  const onTheme = () => applyTelegramTheme()
   const onViewport = () => applySafeArea()
 
-  applyTelegramTheme()
   applySafeArea()
 
-  tg?.onEvent?.('themeChanged', onTheme)
   tg?.onEvent?.('viewportChanged', onViewport)
   tg?.onEvent?.('safeAreaChanged', onViewport)
   tg?.onEvent?.('contentSafeAreaChanged', onViewport)
 
-  // Telegram tashqarisida (dev) tizim temasini kuzatamiz
-  const media = window.matchMedia('(prefers-color-scheme: dark)')
-  const onMedia = () => {
-    if (!isTelegramEnvironment()) applyTelegramTheme()
-  }
-  media.addEventListener('change', onMedia)
-
   return () => {
-    tg?.offEvent?.('themeChanged', onTheme)
     tg?.offEvent?.('viewportChanged', onViewport)
     tg?.offEvent?.('safeAreaChanged', onViewport)
     tg?.offEvent?.('contentSafeAreaChanged', onViewport)
-    media.removeEventListener('change', onMedia)
   }
 }
 

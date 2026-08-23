@@ -4,13 +4,14 @@ import './styles.css'
 import App from './App'
 import { TelegramGate } from './components/ui/TelegramGate'
 import { I18nProvider } from './i18n'
-import { applySafeArea, applyTelegramTheme, isTelegramEnvironment, waitForTelegram } from './utils/telegram'
+import { applySafeArea, isTelegramEnvironment, waitForTelegram } from './utils/telegram'
+import { applyTheme, getStoredTheme } from './utils/theme'
 
 const root = createRoot(document.getElementById('root')!)
 
 function render(insideTelegram: boolean) {
-  // Tema birinchi bo'yoqdan oldin qo'llanadi — "oq chaqnash" bo'lmaydi
-  applyTelegramTheme()
+  // Tema birinchi bo'yoqdan oldin qo'llanadi — chaqnash bo'lmaydi
+  applyTheme(getStoredTheme())
   applySafeArea()
 
   root.render(

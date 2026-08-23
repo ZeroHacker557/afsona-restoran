@@ -1,11 +1,12 @@
 import type { LucideIcon } from 'lucide-react'
-import { Bell, ChevronRight, CircleHelp, ClipboardList, Languages, MapPin, Star, UserRound } from 'lucide-react'
+import { Bell, ChevronRight, CircleHelp, ClipboardList, Languages, MapPin, Moon, Star, Sun, UserRound } from 'lucide-react'
 import { formatPrice } from '../data'
 import { formatOrderDate } from '../utils/date'
 import { IconButton } from '../components/ui/IconButton'
 import { OrderImages } from '../components/order/OrderImages'
 import { getTelegramUser } from '../utils/telegram'
 import { useI18n, type TranslationKey } from '../i18n'
+import type { ThemeMode } from '../utils/theme'
 import type { AppPage, Order, UserProfile } from '../types/domain'
 
 type Option = {
@@ -19,11 +20,13 @@ type Option = {
 type Props = {
   profile: UserProfile | null
   orders: Order[]
+  theme: ThemeMode
+  onToggleTheme: () => void
   onNavigate: (page: AppPage) => void
   onNotify: (msg: string) => void
 }
 
-export function ProfilePage({ profile, orders, onNavigate, onNotify }: Props) {
+export function ProfilePage({ profile, orders, theme, onToggleTheme, onNavigate, onNotify }: Props) {
   const { t, lang } = useI18n()
   const tgUser = getTelegramUser()
 
@@ -53,6 +56,8 @@ export function ProfilePage({ profile, orders, onNavigate, onNotify }: Props) {
     },
     { icon: CircleHelp, titleKey: 'profile.help', subKey: 'profile.helpSub' },
   ]
+
+  const isDark = theme === 'dark'
 
   const stats = [
     { label: t('profile.statOrders'), value: orders.length },
@@ -149,6 +154,39 @@ export function ProfilePage({ profile, orders, onNavigate, onNotify }: Props) {
       <section className="px-5 pb-32 pt-7 sm:px-10" style={{ animation: 'fadeInUp 0.4s ease 0.15s both' }}>
         <h2 className="section-title mb-4">{t('profile.account')}</h2>
         <div className="rounded-2xl border px-5" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+          {/* Ko'rinish — bir bosishda almashadi */}
+          <button onClick={onToggleTheme} className="profile-option">
+            <span
+              className="grid size-10 shrink-0 place-items-center rounded-xl"
+              style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
+            >
+              {isDark ? <Moon size={19} /> : <Sun size={19} />}
+            </span>
+            <div className="min-w-0 flex-1 text-left">
+              <span className="block" style={{ color: 'var(--ink)' }}>{t('profile.theme')}</span>
+              <span className="block text-xs font-normal" style={{ color: 'var(--muted)' }}>
+                {t('profile.themeSub')}
+              </span>
+            </div>
+
+            {/* Switch */}
+            <span
+              className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+              style={{ background: isDark ? 'var(--brand)' : 'var(--line)' }}
+              role="switch"
+              aria-checked={isDark}
+            >
+              <span
+                className="absolute top-0.5 size-5 rounded-full transition-all"
+                style={{
+                  background: 'var(--surface)',
+                  left: isDark ? '1.375rem' : '0.125rem',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              />
+            </span>
+          </button>
+
           {options.map(({ icon: Icon, titleKey, subKey, page, value }, index) => (
             <button
               key={titleKey}

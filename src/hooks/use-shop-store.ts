@@ -4,6 +4,7 @@ import { ensureSignedIn, onAuthChanged, auth } from '../lib/auth'
 import { apiPost, ApiError } from '../lib/api'
 import type { AppPage, Category, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
 import { hapticError, hapticFeedback, hapticSuccess, initTelegram } from '../utils/telegram'
+import { applyTheme, getStoredTheme, storeTheme, type ThemeMode } from '../utils/theme'
 
 /** Pastki menyudagi asosiy sahifalar — ularga o'tganda tarix tozalanadi. */
 const ROOT_PAGES: AppPage[] = ['home', 'catalog', 'favorites', 'orders', 'profile']
@@ -60,6 +61,7 @@ export function useShopStore() {
   const [checkoutDone, setCheckoutDone] = useState(false)
   const [isSubmitting, setSubmitting] = useState(false)
   const [authReady, setAuthReady] = useState(false)
+  const [theme, setThemeState] = useState<ThemeMode>(getStoredTheme)
   // Bitta rasmiylashtirish uchun bitta kalit. Xato bo'lsa saqlanadi —
   // qayta urinishda server yangi buyurtma yaratmaydi.
   const orderKeyRef = useRef<string | null>(null)
@@ -199,6 +201,23 @@ export function useShopStore() {
     setCartOpen(false)
     setSearchOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  const setTheme = useCallback((mode: ThemeMode) => {
+    setThemeState(mode)
+    storeTheme(mode)
+    applyTheme(mode)
+    hapticFeedback('light')
+  }, [])
+
+  const toggleTheme = useCallback(() => {
+    setThemeState((current) => {
+      const next: ThemeMode = current === 'dark' ? 'light' : 'dark'
+      storeTheme(next)
+      applyTheme(next)
+      return next
+    })
+    hapticFeedback('light')
   }, [])
 
   /** Bosh sahifadagi kategoriya bosilganda katalogni filtrlab ochamiz. */
@@ -369,6 +388,7 @@ export function useShopStore() {
     myOrders, checkoutDone, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
     notifications, unreadNotificationsCount,
     catalogCategory, openCategory,
+    theme, setTheme, toggleTheme,
     navigate, goBack, openProduct, toggleLike,
     setSearchOpen, setQuery,
     addToCart, updateCartQuantity,

@@ -181,9 +181,15 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--bg);
+  /*
+   * Longhand va transitionsiz — ataylab.
+   * Chrome'da `transition` qo'yilgan xossaning qiymati CSS
+   * o'zgaruvchisidan kelsa va o'zgaruvchi data-theme orqali almashsa,
+   * transition ishga tushmay eski rang qotib qoladi. Qolgan elementlar
+   * ham darhol almashadi — tema o'zgarishi bir butun ko'rinadi.
+   */
+  background-color: var(--bg);
   color: var(--ink);
-  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 button, input, textarea, select { font: inherit; border: none; background: none; color: inherit; }
@@ -431,10 +437,19 @@ a { color: inherit; text-decoration: none; }
   cursor: pointer;
 }
 
+/*
+ * Kvadrat rasm konteyneri.
+ *
+ * aspect-ratio EMAS, padding-top ishlatilgan: Telegram'ning ichki
+ * brauzeri (ayniqsa eskiroq Android WebView) aspect-ratio'ni
+ * qo'llab-quvvatlamasligi mumkin. U holda konteynerda balandlik
+ * qolmaydi va rasm o'zining asl o'lchamida butun ekranni egallaydi.
+ * padding-top usuli hamma joyda ishlaydi.
+ */
 .product-card-image {
   position: relative;
   width: 100%;
-  aspect-ratio: 1;
+  padding-top: 100%;
   overflow: hidden;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line-soft);
@@ -442,6 +457,8 @@ a { color: inherit; text-decoration: none; }
 .product-card-image.sold-out { opacity: 0.45; }
 
 .product-card-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -451,6 +468,8 @@ a { color: inherit; text-decoration: none; }
 .product-card:hover .product-card-img { transform: scale(1.05); }
 
 .product-card-placeholder {
+  position: absolute;
+  inset: 0;
   display: grid;
   width: 100%;
   height: 100%;

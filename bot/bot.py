@@ -68,9 +68,20 @@ def contact_kb() -> ReplyKeyboardMarkup:
     )
 
 
-def order_action_kb(order_id: str) -> InlineKeyboardMarkup:
-    """Admin uchun 4ta status tugmasi"""
-    return InlineKeyboardMarkup(inline_keyboard=[
+def location_button(order_id: str) -> InlineKeyboardButton:
+    """
+    Bosilganda mijoz manzilini HAQIQIY Telegram lokatsiyasi sifatida
+    yuboradi (havola emas). Uni kuryerga oddiy forward qilish mumkin.
+    """
+    return InlineKeyboardButton(
+        text="📍 Lokatsiyani olish",
+        callback_data=f"loc:{order_id}",
+    )
+
+
+def order_action_kb(order_id: str, has_location: bool = False) -> InlineKeyboardMarkup:
+    """Admin uchun status tugmalari (+ lokatsiya, agar bo'lsa)"""
+    rows = [
         [
             InlineKeyboardButton(text="✅ Qabul",     callback_data=f"os:Qabul qilindi:{order_id}"),
             InlineKeyboardButton(text="🚚 Yetkazish", callback_data=f"os:Yetkazilmoqda:{order_id}")
@@ -78,8 +89,16 @@ def order_action_kb(order_id: str) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text="🎉 Bajarildi", callback_data=f"os:Yetkazildi:{order_id}"),
             InlineKeyboardButton(text="❌ Rad etish", callback_data=f"os:Rad etildi:{order_id}")
-        ]
-    ])
+        ],
+    ]
+    if has_location:
+        rows.append([location_button(order_id)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def order_has_location(order: dict | None) -> bool:
+    loc = (order or {}).get("customer", {}).get("location") or {}
+    return isinstance(loc, dict) and loc.get("lat") is not None and loc.get("lng") is not None
 
 
 def receipt_kb(order_id: str) -> InlineKeyboardMarkup:
@@ -94,13 +113,16 @@ def resend_receipt_kb(order_id: str) -> InlineKeyboardMarkup:
     ])
 
 
-def payment_confirm_kb(order_id: str, user_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
+def payment_confirm_kb(order_id: str, user_id: int, has_location: bool = False) -> InlineKeyboardMarkup:
+    rows = [
         [
             InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"pconf:ok:{order_id}:{user_id}"),
             InlineKeyboardButton(text="❌ Rad etish",  callback_data=f"pconf:no:{order_id}:{user_id}")
-        ]
-    ])
+        ],
+    ]
+    if has_location:
+        rows.append([location_button(order_id)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def mini_app_kb() -> InlineKeyboardMarkup:
@@ -242,6 +264,7 @@ async def notify_admin_order(order_data: dict):
         user_id    = order_data.get("userId")
         total_str  = db.format_price(total) if isinstance(total, (int, float)) else str(total)
         tg_name    = get_display_name(order_data)
+        has_location = order_has_location(order_data)
         pay_label  = "💵 Naqd (yetkazganda)" if pay_method == "Naqd" else "💳 Karta o'tkazmasi"
 
         # ── ADMIN XABARI ──────────────────────────────────────
@@ -287,7 +310,7 @@ async def notify_admin_order(order_data: dict):
         for admin_id in ADMIN_IDS:
             try:
                 await bot.send_message(admin_id, text,
-                                       reply_markup=order_action_kb(doc_id),
+                                       reply_markup=order_action_kb(doc_id, has_location),
                                        disable_web_page_preview=True)
             except Exception as e:
                 logger.warning(f"[ADMIN] {admin_id} ga yuborib bo'lmadi: {e}")
@@ -406,7 +429,8 @@ async def handle_receipt_photo(message: Message, state: FSMContext):
                 await bot.send_photo(admin_id,
                                      photo=message.photo[-1].file_id,
                                      caption=caption,
-                                     reply_markup=payment_confirm_kb(order_id, user_id))
+                                     reply_markup=payment_confirm_kb(
+                                         order_id, user_id, order_has_location(order)))
             except Exception as e:
                 logger.warning(f"[RECEIPT] Admin {admin_id} ga yuborib bo'lmadi: {e}")
         logger.info(f"[RECEIPT] Adminga yo'naltirildi: {order_id} ← {user_id}")
@@ -483,12 +507,61 @@ async def cb_payment_confirm(callback: CallbackQuery):
     try:
         await callback.message.edit_caption(
             caption=current_caption(callback.message) + f"\n\n{mark}\n{hint}",
-            reply_markup=order_action_kb(order_id) if approved else None,
+            reply_markup=order_action_kb(order_id, order_has_location(order)) if approved else None,
         )
     except Exception as e:
         logger.warning(f"[PAY] Chek xabarini yangilab bo'lmadi: {e}")
 
     await callback.answer("✅ Tasdiqlandi" if approved else "❌ Rad etildi")
+
+
+# ─── Lokatsiyani yuborish ────────────────────────────────────
+
+@dp.callback_query(F.data.startswith("loc:"))
+async def cb_send_location(callback: CallbackQuery):
+    """
+    Mijoz manzilini haqiqiy Telegram lokatsiyasi sifatida yuboradi.
+
+    Havola emas, venue xabari — uni kuryerga oddiy forward qilish
+    mumkin va u xaritada ochiladi.
+    """
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Sizda ruxsat yo'q", show_alert=True)
+        return
+
+    order_id = callback.data[len("loc:"):]
+    order = db.get_order_by_id(order_id)
+
+    if not order:
+        await callback.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    customer = order.get("customer", {})
+    loc = customer.get("location") or {}
+    lat, lng = loc.get("lat"), loc.get("lng")
+
+    if lat is None or lng is None:
+        await callback.answer("Bu buyurtmada lokatsiya yo'q", show_alert=True)
+        return
+
+    display_id = db.order_display_id(order)
+    title = f"{customer.get('name') or 'Mijoz'} — {display_id}"
+    address = customer.get("address") or "Manzil ko'rsatilmagan"
+
+    try:
+        # send_venue — pin + nom + manzil. Forward qilinadi, xaritada ochiladi.
+        await bot.send_venue(
+            callback.from_user.id,
+            latitude=float(lat),
+            longitude=float(lng),
+            title=title[:255],
+            address=address[:255],
+        )
+        await callback.answer("Lokatsiya yuborildi")
+        logger.info(f"[LOC] {display_id} -> {callback.from_user.id}")
+    except Exception as e:
+        logger.error(f"[LOC] yuborilmadi: {e}")
+        await callback.answer("Lokatsiyani yuborib bo'lmadi", show_alert=True)
 
 
 # ─── Buyurtmalarim ───────────────────────────────────────────

@@ -16,7 +16,7 @@ import { ProfileEditPage } from './pages/ProfileEditPage'
 import { ReviewsPage } from './pages/ReviewsPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { LanguagePage } from './pages/LanguagePage'
-import { setupBackButton, toggleBackButton, watchTelegramAppearance } from './utils/telegram'
+import { setupBackButton, toggleBackButton, watchSafeArea } from './utils/telegram'
 import { useI18n } from './i18n'
 
 // Xarita kutubxonasi (~150 KB) faqat manzil sahifasi ochilganda yuklanadi (P-01)
@@ -51,8 +51,8 @@ function App() {
     onToggleLike: shop.toggleLike,
   }
 
-  // Telegram temasi va xavfsiz zonasi
-  useEffect(() => watchTelegramAppearance(), [])
+  // Telegram xavfsiz zonasi
+  useEffect(() => watchSafeArea(), [])
 
   // Telegram BackButton — Android'ning tizim tugmasi ham shu bilan ishlaydi
   useEffect(() => setupBackButton(shop.goBack), [shop.goBack])
@@ -161,6 +161,8 @@ function App() {
               <ProfilePage
                 profile={shop.userProfile}
                 orders={shop.myOrders}
+                theme={shop.theme}
+                onToggleTheme={shop.toggleTheme}
                 onNavigate={shop.navigate}
                 onNotify={shop.notify}
               />
