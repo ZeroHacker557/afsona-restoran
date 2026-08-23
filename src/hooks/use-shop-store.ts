@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { subscribeToCategories, subscribeToProducts, sendOrderToFirestore, saveUserToFirestore, subscribeToUserOrders, subscribeToUserProfile, subscribeToUserNotifications, markNotificationsAsRead } from '../lib/firebase'
-import type { AppPage, Category, NewOrder, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
+import { subscribeToCategories, subscribeToProducts, subscribeToUserOrders, subscribeToUserProfile, subscribeToUserNotifications, markNotificationsAsRead } from '../lib/firebase'
+import { ensureSignedIn, onAuthChanged, auth } from '../lib/auth'
+import { apiPost, ApiError } from '../lib/api'
+import type { AppPage, Category, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
 import { hapticError, hapticFeedback, hapticSuccess, initTelegram, getTelegramUser } from '../utils/telegram'
 
 const LIKES_KEY = 'shopOnlineLikes'
@@ -42,6 +44,7 @@ export function useShopStore() {
   const [myOrders, setMyOrders] = useState<Order[]>([])
   const [checkoutDone, setCheckoutDone] = useState(false)
   const [isSubmitting, setSubmitting] = useState(false)
+  const [authReady, setAuthReady] = useState(false)
   const [orderForm, setOrderForm] = useState<OrderForm>({
     name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd',
   })
@@ -49,58 +52,76 @@ export function useShopStore() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0)
 
-  // Initialize Telegram & Firebase real-time subscriptions
+  // Ochiq ma'lumot: katalog. Auth kutilmaydi — Rules'da o'qish ochiq.
   useEffect(() => {
     initTelegram()
-    setLoading(true)
 
-    // Handle User
-    const tgUser = getTelegramUser()
-    if (tgUser) {
-      saveUserToFirestore(tgUser)
-    }
-
-    // 1. Subscribe to Firestore products
     const unsubProds = subscribeToProducts(
       (fbProducts) => {
         setProducts(fbProducts)
         setLoading(false)
       },
-      () => {
-        setLoading(false)
-      }
+      () => setLoading(false),
     )
 
-    // 2. Subscribe to Firestore categories
     const unsubCats = subscribeToCategories(
-      (fbCats) => {
-        setCategories(fbCats)
-      },
-      () => {}
+      (fbCats) => setCategories(fbCats),
+      () => {},
     )
-
-    let unsubOrders: (() => void) | undefined
-    let unsubProfile: (() => void) | undefined
-    let unsubNotifications: (() => void) | undefined
-    if (tgUser) {
-      unsubOrders = subscribeToUserOrders(tgUser.id, (orders) => {
-        setMyOrders(orders)
-      })
-      unsubProfile = subscribeToUserProfile(tgUser.id, (profile) => {
-        if (profile) setUserProfile(profile as UserProfile)
-      })
-      unsubNotifications = subscribeToUserNotifications(tgUser.id, (notifs) => {
-        setNotifications(notifs)
-        setUnreadNotificationsCount(notifs.filter((n: Notification) => !n.read).length)
-      })
-    }
 
     return () => {
       unsubProds()
       unsubCats()
-      if (unsubOrders) unsubOrders()
-      if (unsubProfile) unsubProfile()
-      if (unsubNotifications) unsubNotifications()
+    }
+  }, [])
+
+  // Shaxsiy ma'lumot: faqat Telegram imzosi tekshirilgandan keyin (F-02).
+  // Tizimga kirmagan holatda Rules bu kolleksiyalarni bermaydi, shuning
+  // uchun umuman obuna bo'lmaymiz.
+  useEffect(() => {
+    ensureSignedIn()
+
+    let unsubOrders: (() => void) | undefined
+    let unsubProfile: (() => void) | undefined
+    let unsubNotifications: (() => void) | undefined
+
+    const stopAll = () => {
+      unsubOrders?.()
+      unsubProfile?.()
+      unsubNotifications?.()
+      unsubOrders = undefined
+      unsubProfile = undefined
+      unsubNotifications = undefined
+    }
+
+    const unsubAuth = onAuthChanged((user) => {
+      stopAll()
+
+      if (!user) {
+        setAuthReady(true)
+        setUserProfile(null)
+        setMyOrders([])
+        setNotifications([])
+        setUnreadNotificationsCount(0)
+        return
+      }
+
+      const userId = Number(user.uid)
+      setAuthReady(true)
+
+      unsubOrders = subscribeToUserOrders(userId, setMyOrders)
+      unsubProfile = subscribeToUserProfile(userId, (profile) => {
+        if (profile) setUserProfile(profile as UserProfile)
+      })
+      unsubNotifications = subscribeToUserNotifications(userId, (notifs) => {
+        setNotifications(notifs)
+        setUnreadNotificationsCount(notifs.filter((n: Notification) => !n.read).length)
+      })
+    })
+
+    return () => {
+      unsubAuth()
+      stopAll()
     }
   }, [])
 
@@ -139,9 +160,9 @@ export function useShopStore() {
   )
 
   const navigate = useCallback((nextPage: AppPage) => {
-    const tgUser = getTelegramUser()
-    if (nextPage === 'notifications' && tgUser) {
-      markNotificationsAsRead(tgUser.id)
+    const uid = auth.currentUser?.uid
+    if (nextPage === 'notifications' && uid) {
+      markNotificationsAsRead(Number(uid))
     }
     setPage(nextPage)
     setCartOpen(false)
@@ -210,7 +231,12 @@ export function useShopStore() {
     setOrderForm((prev) => ({ ...prev, [field]: value }))
   }, [])
 
-  const submitOrder = useCallback(async (finalTotal: number) => {
+  /**
+   * Buyurtmani SERVER yaratadi (F-04). Bu yerdan faqat "nimadan nechta"
+   * yuboriladi — narx, chegirma va jami serverda qayta hisoblanadi,
+   * shuning uchun finalTotal parametri endi kerak emas.
+   */
+  const submitOrder = useCallback(async () => {
     if (isSubmitting) return false
 
     if (!orderForm.name.trim() || !orderForm.phone.trim() || !orderForm.address.trim()) {
@@ -223,27 +249,30 @@ export function useShopStore() {
       return false
     }
 
-    const tgUser = getTelegramUser()
-
-    const newOrder: NewOrder = {
-      products: cartProducts,
-      total: Math.round(finalTotal),
-      status: 'Yangi',
-      paymentMethod: orderForm.paymentMethod,
-      paymentStatus: orderForm.paymentMethod === 'Karta' ? 'Kutilmoqda' : undefined,
-      customer: { ...orderForm },
-      userId: tgUser?.id,
-      username: tgUser?.username,
-    }
-
     setSubmitting(true)
     try {
-      await sendOrderToFirestore(newOrder)
+      await apiPost<{ id: string; orderNumber: string; total: number }>('/api/orders', {
+        items: cartProducts.map(({ product, quantity, size, color }) => ({
+          productId: product.id,
+          quantity,
+          size,
+          color,
+        })),
+        customer: {
+          name: orderForm.name.trim(),
+          phone: orderForm.phone.trim(),
+          address: orderForm.address.trim(),
+          location: orderForm.location,
+          comment: orderForm.comment,
+          paymentMethod: orderForm.paymentMethod,
+        },
+        promoCode: orderForm.promoCode,
+      })
     } catch (error) {
-      // Buyurtma saqlanmadi — savat SAQLANIB qoladi (F-05)
+      // Buyurtma yaratilmadi — savat SAQLANIB qoladi (F-05)
       console.error('[Buyurtma] yuborilmadi:', error)
       hapticError()
-      notify("Buyurtma yuborilmadi. Internetni tekshirib, qayta urinib ko'ring")
+      notify(error instanceof ApiError ? error.message : "Buyurtma yuborilmadi, qayta urinib ko'ring")
       return false
     } finally {
       setSubmitting(false)
@@ -264,7 +293,7 @@ export function useShopStore() {
     cartItems, cartCount, cartTotal, cartProducts,
     likedIds, selectedProduct,
     isSearchOpen, isCartOpen, query, searchResults, toast,
-    myOrders, checkoutDone, isSubmitting, orderForm, userProfile,
+    myOrders, checkoutDone, isSubmitting, authReady, orderForm, userProfile,
     notifications, unreadNotificationsCount,
     navigate, openProduct, toggleLike,
     setSearchOpen, setQuery,

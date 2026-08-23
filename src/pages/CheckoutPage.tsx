@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, Check, MapPin, MessageSquare, Phone, Send, ShoppingBag, User, CreditCard, Banknote, Tag, Loader2 } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl, hapticFeedback } from '../utils/telegram'
-import { db, getPaymentSettings } from '../lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
-import type { OrderForm, PaymentSettings, Product, PromoCode } from '../types/domain'
+import { getPaymentSettings } from '../lib/firebase'
+import { apiPost, ApiError } from '../lib/api'
+import type { OrderForm, PaymentSettings, Product } from '../types/domain'
 import L from 'leaflet'
 
 // Fix Leaflet default icon issue
@@ -18,13 +18,20 @@ const DefaultIcon = L.icon({
 })
 L.Marker.prototype.options.icon = DefaultIcon
 
+type AppliedPromo = {
+  code: string
+  discountPercent: number
+  discount: number
+  total: number
+}
+
 type Props = {
   profile: import('../types/domain').UserProfile | null
   cartProducts: { product: Product; quantity: number; size?: string; color?: string; cartKey: string }[]
   cartTotal: number
   orderForm: OrderForm
   onUpdateForm: (field: keyof OrderForm, value: any) => void
-  onSubmit: (finalTotal: number) => Promise<boolean>
+  onSubmit: () => Promise<boolean>
   isSubmitting: boolean
   onBack: () => void
   onNavigate: (page: import('../types/domain').AppPage) => void
@@ -34,7 +41,7 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
   const [copied, setCopied] = useState(false)
   const [promoInput, setPromoInput] = useState('')
   const [promoLoading, setPromoLoading] = useState(false)
-  const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null)
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null)
   const [promoError, setPromoError] = useState('')
   const [payment, setPayment] = useState<PaymentSettings | null>(null)
   const addresses = profile?.addresses || []
@@ -48,7 +55,9 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
     return () => { alive = false }
   }, [])
 
-  const finalTotal = appliedPromo ? cartTotal * (1 - appliedPromo.discountPercent / 100) : cartTotal
+  // Chegirmani server hisoblaydi — bu faqat ko'rsatish uchun (F-04)
+  const discount = appliedPromo?.discount ?? 0
+  const finalTotal = Math.max(cartTotal - discount, 0)
 
   // Avtomatik to'ldirish
   if (!orderForm.name && profile?.first_name) {
@@ -65,31 +74,37 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
     })
   }
 
+  // Promokodni server tekshiradi — mijoz promocodes kolleksiyasini
+  // umuman o'qiy olmaydi (F-18)
   const handleApplyPromo = async () => {
-    if (!promoInput.trim()) return
+    const code = promoInput.trim().toUpperCase()
+    if (!code) return
+
     setPromoLoading(true)
     setPromoError('')
     try {
-      const q = query(collection(db, 'promocodes'), where('code', '==', promoInput.trim().toUpperCase()), where('active', '==', true))
-      const snap = await getDocs(q)
-      if (snap.empty) {
-        setPromoError('Noto\'g\'ri yoki muddati o\'tgan kod')
-        setAppliedPromo(null)
-      } else {
-        const promoData = { id: snap.docs[0].id, ...snap.docs[0].data() } as PromoCode
-        setAppliedPromo(promoData)
-        setPromoError('')
-        onUpdateForm('promoCode', promoData.code) // Custom logic to save promo code if needed
-      }
-    } catch {
-      setPromoError('Xatolik yuz berdi')
+      const result = await apiPost<AppliedPromo>('/api/promo', { code, subtotal: cartTotal })
+      setAppliedPromo(result)
+      onUpdateForm('promoCode', result.code)
+    } catch (error) {
+      setAppliedPromo(null)
+      onUpdateForm('promoCode', undefined)
+      setPromoError(error instanceof ApiError ? error.message : 'Xatolik yuz berdi')
+    } finally {
+      setPromoLoading(false)
     }
-    setPromoLoading(false)
+  }
+
+  const handleClearPromo = () => {
+    setAppliedPromo(null)
+    setPromoInput('')
+    setPromoError('')
+    onUpdateForm('promoCode', undefined)
   }
 
   const handleSubmit = async () => {
     if (isSubmitting) return
-    await onSubmit(finalTotal)
+    await onSubmit()
   }
 
   const isValid = Boolean(orderForm.name.trim() && orderForm.phone.trim() && orderForm.address.trim())
@@ -169,7 +184,7 @@ export function CheckoutPage({ profile, cartProducts, cartTotal, orderForm, onUp
                 </button>
               ) : (
                 <button
-                  onClick={() => { setAppliedPromo(null); setPromoInput(''); }}
+                  onClick={handleClearPromo}
                   className="grid h-11 w-20 place-items-center rounded-xl text-sm font-bold text-slate-500 transition hover:bg-slate-100 border border-slate-200"
                 >
                   Bekor q.

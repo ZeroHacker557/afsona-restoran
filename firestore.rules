@@ -1,0 +1,105 @@
+rules_version = '2';
+
+// ShopOnline Firestore xavfsizlik qoidalari
+//
+// Asosiy tamoyil: mijoz brauzeri hech qachon pul bilan bog'liq
+// ma'lumotni yoza olmaydi. Buyurtma, promokod va statuslar faqat
+// server tomonidan (Vercel serverless funksiyalari yoki bot'ning
+// service account'i orqali) yoziladi.
+//
+// Admin SDK (bot va /api/*) bu qoidalarni butunlay chetlab o'tadi —
+// shuning uchun ular uchun alohida ruxsat yozish shart emas.
+//
+// Deploy:  firebase deploy --only firestore:rules
+// yoki Firebase Console → Firestore → Rules ga nusxalang.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Foydalanuvchi Telegram id'si bilan tizimga kirgan bo'lishi kerak.
+    // uid — Telegram user id'sining matn ko'rinishi (/api/auth beradi).
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == string(userId);
+    }
+
+    // ── Katalog: hamma o'qiydi, hech kim yozmaydi ────────────
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if false;   // faqat bot (Admin SDK)
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if false;   // faqat bot (Admin SDK)
+    }
+
+    // ── Profil: faqat o'zinikini ────────────────────────────
+    // Foydalanuvchi ismi, telefoni va manzillarini o'zgartira oladi.
+    // Boshqa maydonlarni (masalan rollarni) o'zgartira olmaydi.
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if false;  // /api/auth yaratadi
+      allow update: if isOwner(userId)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['first_name', 'last_name', 'phone', 'addresses']);
+      allow delete: if false;
+    }
+
+    // ── Buyurtmalar: o'qish mumkin, yozish YO'Q ─────────────
+    // Buyurtmani faqat /api/orders yaratadi (narx serverda hisoblanadi),
+    // statusni faqat bot o'zgartiradi.
+    match /orders/{orderId} {
+      allow read: if signedIn() && resource.data.userId == int(request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── Sharhlar ────────────────────────────────────────────
+    // Hamma o'qiydi. Yozishda: faqat o'z nomidan, 1-5 oralig'ida baho.
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if signedIn()
+                    && request.resource.data.userId == int(request.auth.uid)
+                    && request.resource.data.rating is int
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && request.resource.data.comment.size() <= 1000;
+      allow update, delete: if false;
+    }
+
+    // ── Bildirishnomalar ────────────────────────────────────
+    // Faqat o'zinikini o'qiydi va faqat "read" bayrog'ini o'zgartira oladi.
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == int(request.auth.uid);
+      allow create, delete: if false;
+      allow update: if signedIn()
+                    && resource.data.userId == int(request.auth.uid)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+
+    // ── Promokodlar: mijoz ko'ra olmaydi ────────────────────
+    // Tekshirish /api/promo va /api/orders orqali.
+    match /promocodes/{promoId} {
+      allow read, write: if false;
+    }
+
+    // ── Sozlamalar: o'qish mumkin (karta raqami), yozish yo'q ──
+    match /settings/{docId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // ── Hisoblagichlar: faqat server ────────────────────────
+    match /counters/{docId} {
+      allow read, write: if false;
+    }
+
+    // Yuqorida sanalmagan hamma narsa yopiq
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

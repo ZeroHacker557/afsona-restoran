@@ -1,8 +1,8 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, setDoc, updateDoc, writeBatch, getDocs, getDoc, runTransaction } from 'firebase/firestore'
+import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { parseDate } from '../utils/date'
-import type { Product, Category, Order, NewOrder, PaymentSettings, Notification } from '../types/domain'
+import type { Product, Category, Order, PaymentSettings, Notification } from '../types/domain'
 
 const firebaseConfig = {
   apiKey: "AIzaSyB-JENf9xTOJcEF81-6KJxb0HnCyLmjkc0",
@@ -89,48 +89,9 @@ function hashString(str: string): number {
 
 // ── ORDERS ───────────────────────────────────────────────────
 
-const ORDER_NUMBER_START = 1000
-
-/**
- * Ketma-ket buyurtma raqamini transaction ichida oladi.
- * Bu FAQAT ko'rsatish uchun — buyurtmaning haqiqiy kaliti Firestore doc.id.
- * Hisoblagich ishlamay qolsa buyurtma baribir yaratiladi (zaxira raqam bilan).
- */
-async function nextOrderNumber(): Promise<string> {
-  try {
-    const counterRef = doc(db, 'counters', 'orders')
-    const value = await runTransaction(db, async (tx) => {
-      const snap = await tx.get(counterRef)
-      const current = snap.exists() ? Number(snap.data().value) || ORDER_NUMBER_START : ORDER_NUMBER_START
-      const next = current + 1
-      tx.set(counterRef, { value: next }, { merge: true })
-      return next
-    })
-    return `#${value}`
-  } catch (error) {
-    console.warn('[Firebase] Buyurtma hisoblagichi ishlamadi, zaxira raqam ishlatildi:', error)
-    return `#${Date.now().toString().slice(-8)}`
-  }
-}
-
-/**
- * Buyurtmani Firestore'ga yozadi va {id, orderNumber} qaytaradi.
- * Xatoni YUTMAYDI — chaqiruvchi uni ushlab, foydalanuvchiga xabar berishi shart (F-05).
- */
-export async function sendOrderToFirestore(order: NewOrder): Promise<{ id: string; orderNumber: string }> {
-  const orderNumber = await nextOrderNumber()
-  const cleanOrder = JSON.parse(JSON.stringify(order))
-
-  const ref = await addDoc(collection(db, 'orders'), {
-    ...cleanOrder,
-    orderNumber,
-    createdAt: new Date().toISOString(),
-    // Bot shu bayroq bo'yicha ishlaydi: vaqtga emas, holatga tayanadi (F-21)
-    notified: false,
-  })
-
-  return { id: ref.id, orderNumber }
-}
+// Buyurtmani mijoz emas, SERVER yaratadi: POST /api/orders.
+// Narx, chegirma va jami Firestore'dagi haqiqiy qiymatlardan
+// qayta hisoblanadi, shuning uchun bu yerda addDoc yo'q (F-04).
 
 // ── PAYMENT SETTINGS ─────────────────────────────────────────
 
@@ -155,18 +116,7 @@ export async function getPaymentSettings(): Promise<PaymentSettings> {
   }
 }
 
-// User Management
-export async function saveUserToFirestore(user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) {
-  try {
-    const usersRef = collection(db, 'users')
-    await setDoc(doc(usersRef, String(user.id)), {
-      ...user,
-      lastActive: new Date().toISOString()
-    }, { merge: true })
-  } catch (error) {
-    console.error("Error saving user to Firestore:", error)
-  }
-}
+// Foydalanuvchi hujjatini /api/auth yaratadi va yangilaydi.
 
 export function subscribeToUserProfile(userId: number, callback: (profile: any) => void) {
   const userRef = doc(db, 'users', String(userId))
