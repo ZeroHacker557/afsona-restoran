@@ -41,8 +41,14 @@ const BY_NAME: [RegExp, LucideIcon][] = [
   [/barcha|hamma|все|all/i, Grid2X2],
 ]
 
+/**
+ * Bot yangi kategoriyaga doim "package" yozadi — bu "tanlanmagan" degani.
+ * Shuning uchun uni e'tiborsiz qoldirib, nom bo'yicha aniqlashga o'tamiz.
+ */
+const UNSET_ICONS = new Set(['', 'package', 'Package'])
+
 export function categoryIcon(icon?: string, name?: string): LucideIcon {
-  if (icon) {
+  if (icon && !UNSET_ICONS.has(icon.trim())) {
     const found = BY_KEY[icon.toLowerCase().trim()]
     if (found) return found
   }

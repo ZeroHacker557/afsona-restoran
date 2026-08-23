@@ -185,10 +185,14 @@ export function applyTelegramTheme() {
   const tg = getTelegram()
   const root = document.documentElement
 
-  if (tg?.colorScheme) {
+  // MUHIM: telegram-web-app.js Telegram TASHQARISIDA ham yuklanadi va
+  // colorScheme'ni har doim 'light' deb qaytaradi. Shunga ishonsak,
+  // brauzerda tizim qorong'i rejimi e'tiborsiz qolib ketadi. Shuning
+  // uchun bu qiymatni faqat haqiqatan Telegram ichida bo'lsak olamiz.
+  if (isTelegramEnvironment() && tg?.colorScheme) {
     root.setAttribute('data-theme', tg.colorScheme)
   } else {
-    // Telegram tashqarisida tizim tanlovini o'z holiga qoldiramiz
+    // Tashqarida tanlovni tizimga qoldiramiz (prefers-color-scheme)
     root.removeAttribute('data-theme')
   }
 
@@ -236,7 +240,7 @@ export function watchTelegramAppearance(): () => void {
   // Telegram tashqarisida (dev) tizim temasini kuzatamiz
   const media = window.matchMedia('(prefers-color-scheme: dark)')
   const onMedia = () => {
-    if (!getTelegram()) applyTelegramTheme()
+    if (!isTelegramEnvironment()) applyTelegramTheme()
   }
   media.addEventListener('change', onMedia)
 
