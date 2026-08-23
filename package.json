@@ -14,7 +14,7 @@
     "@types/leaflet": "^1.9.22",
     "@vitejs/plugin-react": "latest",
     "firebase": "^12.18.0",
-    "firebase-admin": "^14.3.0",
+    "firebase-admin": "^13.10.0",
     "leaflet": "^1.9.4",
     "lucide-react": "latest",
     "react": "latest",
