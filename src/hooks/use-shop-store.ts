@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { subscribeToCategories, subscribeToProducts, subscribeToUserOrders, subscribeToUserProfile, subscribeToUserNotifications, markNotificationsAsRead } from '../lib/firebase'
 import { ensureSignedIn, onAuthChanged, auth } from '../lib/auth'
 import { apiPost, ApiError } from '../lib/api'
@@ -21,6 +21,14 @@ function saveLikes(ids: number[]) {
 }
 
 /** Savat saqlanadi: Telegram mini app'ni yopib-ochganda yo'qolmasligi uchun (F-14). */
+/** Takroriy buyurtmani to'sish uchun noyob kalit. */
+function newOrderKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 function loadCart(): CartItems {
   try {
     const raw = JSON.parse(localStorage.getItem(CART_KEY) || '{}')
@@ -45,6 +53,9 @@ export function useShopStore() {
   const [checkoutDone, setCheckoutDone] = useState(false)
   const [isSubmitting, setSubmitting] = useState(false)
   const [authReady, setAuthReady] = useState(false)
+  // Bitta rasmiylashtirish uchun bitta kalit. Xato bo'lsa saqlanadi —
+  // qayta urinishda server yangi buyurtma yaratmaydi.
+  const orderKeyRef = useRef<string | null>(null)
   const [isAuthenticated, setAuthenticated] = useState(false)
   const [orderForm, setOrderForm] = useState<OrderForm>({
     name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd',
@@ -252,9 +263,12 @@ export function useShopStore() {
       return false
     }
 
+    if (!orderKeyRef.current) orderKeyRef.current = newOrderKey()
+
     setSubmitting(true)
     try {
       await apiPost<{ id: string; orderNumber: string; total: number }>('/api/orders', {
+        clientOrderId: orderKeyRef.current,
         items: cartProducts.map(({ product, quantity, size, color }) => ({
           productId: product.id,
           quantity,
@@ -281,6 +295,7 @@ export function useShopStore() {
       setSubmitting(false)
     }
 
+    orderKeyRef.current = null
     setCartItems({})
     setOrderForm({ name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd' })
     setCheckoutDone(true)

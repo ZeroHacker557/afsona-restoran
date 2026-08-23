@@ -240,6 +240,20 @@ def get_order_by_id(order_id: str):
         return None
 
 
+def delete_order(doc_id: str) -> bool:
+    """Buyurtmani butunlay o'chiradi. Faqat admin paneldan chaqiriladi."""
+    try:
+        ref = db.collection("orders").document(str(doc_id))
+        if not ref.get().exists:
+            return False
+        ref.delete()
+        print(f"[DEL] Buyurtma o'chirildi: {doc_id}")
+        return True
+    except Exception as e:
+        print(f"[ERR] delete_order: {e}")
+        return False
+
+
 def order_display_id(order: dict) -> str:
     """Foydalanuvchiga ko'rsatiladigan raqam (eski yozuvlarda 'id' maydoni)."""
     return order.get("orderNumber") or order.get("id") or "—"

@@ -988,11 +988,127 @@ async def show_orders(callback: CallbackQuery, status: str):
             text += "\n\n"
         text += f"<i>Oxirgi {len(orders)} ta ko'rsatildi.</i>"
 
+    kb = orders_filter_kb(status)
+    if orders:
+        # Har bir buyurtma uchun ochish tugmasi — ro'yxatning tepasiga
+        rows = []
+        for o in orders:
+            rows.append([InlineKeyboardButton(
+                text=f"{db.order_display_id(o)} \u2014 {o.get('status', 'Yangi')}",
+                callback_data=f"ordv_{o.get('_doc_id', '')}",
+            )])
+        kb = InlineKeyboardMarkup(inline_keyboard=rows + kb.inline_keyboard)
+
     try:
-        await callback.message.edit_text(text, reply_markup=orders_filter_kb(status), parse_mode="HTML")
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
-        await callback.message.answer(text, reply_markup=orders_filter_kb(status), parse_mode="HTML")
+        await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
+
+
+# ─── Bitta buyurtma: tafsilot va o'chirish ───────────────────
+
+@router.callback_query(F.data.startswith("ordv_"))
+async def cb_order_view(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    doc_id = callback.data[len("ordv_"):]
+    order = db.get_order_by_id(doc_id)
+    if not order:
+        await callback.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    customer = order.get("customer", {})
+    total = order.get("total", 0)
+    total_str = db.format_price(total) if isinstance(total, (int, float)) else str(total)
+
+    text = f"\U0001f9fe <b>Buyurtma {db.order_display_id(order)}</b>\n"
+    text += "\u2501" * 22 + "\n\n"
+    text += f"\U0001f4c5 {db.order_date_text(order)}\n"
+    text += f"\U0001f4ca Holat: <b>{order.get('status', 'Yangi')}</b>\n"
+
+    if order.get("paymentMethod") == "Karta":
+        text += f"\U0001f4b3 To'lov: Karta \u2014 {order.get('paymentStatus') or 'Kutilmoqda'}\n"
+    else:
+        text += "\U0001f4b5 To'lov: Naqd (yetkazganda)\n"
+
+    cust_name = customer.get("name") or "\u2014"
+    cust_phone = customer.get("phone") or "\u2014"
+    cust_addr = customer.get("address") or "\u2014"
+    text += f"\n\U0001f464 <b>Ism:</b> {cust_name}\n"
+    text += f"\U0001f4de <b>Tel:</b> <code>{cust_phone}</code>\n"
+    text += f"\U0001f4cd <b>Manzil:</b> {cust_addr}\n"
+    if customer.get("comment"):
+        text += f"\U0001f4ac <b>Izoh:</b> {customer['comment']}\n"
+
+    text += "\n\U0001f4e6 <b>Mahsulotlar:</b>\n"
+    for i, item in enumerate(order.get("products", []), 1):
+        prod = item.get("product") or item
+        variant = []
+        if item.get("size"):
+            variant.append(f"O'lcham: {item['size']}")
+        if item.get("color"):
+            variant.append(f"Rang: {item['color']}")
+        var_text = f" ({', '.join(variant)})" if variant else ""
+        qty = item.get("quantity", 1)
+        price = prod.get("price", 0)
+        text += f"  {i}. {prod.get('name', '?')}{var_text} \u2014 {qty} ta \u00d7 {db.format_price(price)}\n"
+
+    text += "\n" + "\u2501" * 22 + "\n"
+    text += f"\U0001f4b0 <b>Jami: {total_str}</b>\n"
+    text += f"\n<code>{doc_id}</code>"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="\U0001f5d1 O'chirish", callback_data=f"orddel_{doc_id}")],
+        [InlineKeyboardButton(text="\u25c0\ufe0f Buyurtmalar", callback_data="admin_orders")],
+    ])
+
+    try:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("orddel_"))
+async def cb_order_delete_confirm(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    doc_id = callback.data[len("orddel_"):]
+    order = db.get_order_by_id(doc_id)
+    if not order:
+        await callback.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        f"\u26a0\ufe0f <b>Buyurtma {db.order_display_id(order)} o'chirilsinmi?</b>\n\n"
+        "Bu amalni ortga qaytarib bo'lmaydi \u2014 buyurtma butunlay o'chadi.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="\U0001f5d1 Ha, o'chirilsin", callback_data=f"orddelok_{doc_id}")],
+            [InlineKeyboardButton(text="\u21a9\ufe0f Bekor qilish", callback_data=f"ordv_{doc_id}")],
+        ]),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("orddelok_"))
+async def cb_order_delete(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    doc_id = callback.data[len("orddelok_"):]
+    if db.delete_order(doc_id):
+        await callback.answer("O'chirildi", show_alert=True)
+    else:
+        await callback.answer("Buyurtma topilmadi", show_alert=True)
+
+    await show_orders(callback, "all")
 
 
 # ─── Yetkazib berish sozlamalari ─────────────────────────────

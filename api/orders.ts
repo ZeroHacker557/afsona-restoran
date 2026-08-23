@@ -22,6 +22,8 @@ type IncomingOrder = {
     paymentMethod: 'Naqd' | 'Karta'
   }
   promoCode?: string
+  /** Takroriy buyurtmani to'sish uchun mijoz yaratadigan noyob kalit. */
+  clientOrderId?: string
 }
 
 /** Mijoz yuborgan ma'lumotni tozalaymiz — narx, jami va status bu yerdan kelmaydi. */
@@ -66,6 +68,7 @@ function readOrder(body: unknown): IncomingOrder {
       paymentMethod,
     },
     promoCode: b?.promoCode ? String(b.promoCode).trim().toUpperCase().slice(0, 40) : undefined,
+    clientOrderId: b?.clientOrderId ? String(b.clientOrderId).slice(0, 64) : undefined,
   }
 }
 
@@ -119,6 +122,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const deliveryRef = db.collection('settings').doc('delivery')
       const deliverySnap = await tx.get(deliveryRef)
+
+      // Takroriylikni to'sish: xuddi shu kalit bilan buyurtma allaqachon
+      // yaratilgan bo'lsa, yangisini yaratmay o'shani qaytaramiz. Sekin
+      // internetda javob yo'qolib, mijoz qayta bosganda ham bitta buyurtma
+      // qoladi.
+      if (order.clientOrderId) {
+        const existing = await tx.get(
+          db.collection('orders').where('clientOrderId', '==', order.clientOrderId).limit(1),
+        )
+        if (!existing.empty) {
+          const doc = existing.docs[0]
+          const data = doc.data()
+          return {
+            id: doc.id,
+            orderNumber: String(data.orderNumber || ''),
+            total: Number(data.total) || 0,
+            discount: Number(data.discount) || 0,
+            deliveryFee: Number(data.deliveryFee) || 0,
+            duplicate: true,
+          }
+        }
+      }
 
       let promoRef: FirebaseFirestore.DocumentReference | null = null
       let promoData: FirebaseFirestore.DocumentData | null = null
@@ -249,12 +274,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         paymentMethod: order.customer.paymentMethod,
         paymentStatus: order.customer.paymentMethod === 'Karta' ? 'Kutilmoqda' : null,
         customer: { ...order.customer, promoCode: appliedPromo },
+        clientOrderId: order.clientOrderId ?? null,
         userId,
         username: userData.username ?? null,
         notified: false,
       })
 
-      return { id: orderRef.id, orderNumber: `#${nextCounter}`, total, discount, deliveryFee: appliedDelivery }
+      return {
+        id: orderRef.id,
+        orderNumber: `#${nextCounter}`,
+        total,
+        discount,
+        deliveryFee: appliedDelivery,
+        duplicate: false,
+      }
     })
 
     return res.status(200).json(result)
