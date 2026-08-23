@@ -1,7 +1,7 @@
 # Bot Configuration
 BOT_TOKEN    = "8943083942:AAF5JH5QOBUnln8v489MrXkiFiezKAXUlrI"
 BOT_USERNAME = "ecommercy_test_bot"
-ADMIN_IDS    = {7203124812, 8374577697}   # Barcha adminlar
+ADMIN_IDS    = {7203124812}   # Barcha adminlar
 MINI_APP_URL = "https://ecommercy.vercel.app"
 API_HOST     = "0.0.0.0"
 API_PORT     = 8080
