@@ -307,6 +307,30 @@ def claim_order_notification(doc_id: str) -> bool:
         return False
 
 
+def claim_cancel_notification(doc_id: str) -> bool:
+    """
+    Mijoz bekor qilgan buyurtmani 'adminga aytildi' deb belgilaydi.
+    claim_order_notification bilan bir xil mantiq — takroriy xabar bo'lmasin.
+    """
+    ref = db.collection("orders").document(doc_id)
+
+    @firestore.transactional
+    def _claim(transaction):
+        snap = ref.get(transaction=transaction)
+        if not snap.exists:
+            return False
+        if snap.to_dict().get("cancelNotified") is not False:
+            return False
+        transaction.update(ref, {"cancelNotified": True})
+        return True
+
+    try:
+        return _claim(db.transaction())
+    except Exception as e:
+        print(f"[ERR] claim_cancel_notification: {e}")
+        return False
+
+
 def release_order_notification(doc_id: str):
     """Xabar yuborilmasa bayroqni qaytaramiz — keyingi urinishda qayta yuboriladi."""
     try:
@@ -331,7 +355,7 @@ def get_user_orders(user_id: int):
         return []
 
 
-def listen_to_new_orders(callback):
+def listen_to_new_orders(callback, cancel_callback=None):
     """
     Yangi buyurtmalarni kuzatadi va callback'ni chaqiradi.
 
@@ -346,22 +370,28 @@ def listen_to_new_orders(callback):
 
     def on_snapshot(col_snapshot, changes, read_time):
         for change in changes:
-            if change.type.name != 'ADDED':
-                continue
-
             order_data = change.document.to_dict() or {}
-            if order_data.get("notified") is not False:
-                continue
+            doc_id = change.document.id
 
-            if not claim_order_notification(change.document.id):
-                continue
+            # ── Yangi buyurtma ──
+            if change.type.name == 'ADDED':
+                if order_data.get("notified") is False and claim_order_notification(doc_id):
+                    order_data['_doc_id'] = doc_id
+                    try:
+                        callback(order_data)
+                    except Exception as e:
+                        print(f"[ERR] Buyurtma callback xatosi: {e}")
+                        release_order_notification(doc_id)
+                    continue
 
-            order_data['_doc_id'] = change.document.id
-            try:
-                callback(order_data)
-            except Exception as e:
-                print(f"[ERR] Buyurtma callback xatosi: {e}")
-                release_order_notification(change.document.id)
+            # ── Mijoz bekor qildi ──
+            if cancel_callback and order_data.get("cancelNotified") is False:
+                if claim_cancel_notification(doc_id):
+                    order_data['_doc_id'] = doc_id
+                    try:
+                        cancel_callback(order_data)
+                    except Exception as e:
+                        print(f"[ERR] Bekor qilish callback xatosi: {e}")
 
     orders_watch = db.collection("orders").on_snapshot(on_snapshot)
     return orders_watch

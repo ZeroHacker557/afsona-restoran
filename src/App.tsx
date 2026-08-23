@@ -152,6 +152,7 @@ function App() {
                 onSearch={() => shop.setSearchOpen(true)}
                 onOpenCart={shop.openCart}
                 onGoToCatalog={goToCatalog}
+                onNotify={shop.notify}
               />
             </div>
           )}

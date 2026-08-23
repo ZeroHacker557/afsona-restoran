@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
+import { getFirestore, collection, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { parseDate } from '../utils/date'
 import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notification, UserProfile } from '../types/domain'
@@ -191,15 +191,7 @@ export function subscribeToUserOrders(userId: number, callback: (orders: Order[]
 // ── REVIEWS ──────────────────────────────────────────────────
 import type { Review } from '../types/domain'
 
-export async function addReview(review: Omit<Review, 'id'>) {
-  try {
-    const reviewsRef = collection(db, 'reviews')
-    await addDoc(reviewsRef, review)
-  } catch (error) {
-    console.error("Error adding review:", error)
-    throw error
-  }
-}
+// Sharhni /api/reviews yaratadi — mijoz to'g'ridan-to'g'ri yoza olmaydi.
 
 export function subscribeToProductReviews(productId: number, callback: (reviews: Review[]) => void) {
   const reviewsRef = collection(db, 'reviews')

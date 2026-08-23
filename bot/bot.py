@@ -354,6 +354,40 @@ async def notify_admin_order(order_data: dict):
             db.release_order_notification(failed_doc_id)
 
 
+async def notify_admin_cancel(order_data: dict):
+    """Mijoz buyurtmani bekor qilganda adminga xabar (5-band)."""
+    try:
+        customer = order_data.get("customer", {})
+        display_id = db.order_display_id(order_data)
+        total = order_data.get("total", 0)
+        total_str = db.format_price(total) if isinstance(total, (int, float)) else str(total)
+
+        cust_name = customer.get("name") or "—"
+        cust_phone = customer.get("phone") or "—"
+
+        text = f"\u274c <b>BUYURTMA BEKOR QILINDI</b>\n"
+        text += "\u2501" * 22 + "\n\n"
+        text += f"\U0001f9fe Buyurtma: <b>{display_id}</b>\n"
+        text += f"\U0001f464 Mijoz: {cust_name}\n"
+        text += f"\U0001f4de Tel: <code>{cust_phone}</code>\n"
+        text += f"\U0001f4b0 Summa: <b>{total_str}</b>\n\n"
+        text += "\U0001f4e6 <b>Mahsulotlar:</b>\n"
+        for item in order_data.get("products", []):
+            prod = item.get("product") or item
+            text += f"  \u2022 {prod.get('name', '?')} \u00d7 {item.get('quantity', 1)}\n"
+        text += "\n<i>Mijozning o'zi bekor qildi. Ombor qoldig'i qaytarildi.</i>"
+
+        for admin_id in ADMIN_IDS:
+            try:
+                await bot.send_message(admin_id, text)
+            except Exception as e:
+                logger.warning(f"[CANCEL] {admin_id} ga yuborib bo'lmadi: {e}")
+
+        logger.info(f"[CANCEL] {display_id} bekor qilindi")
+    except Exception as e:
+        logger.error(f"[CANCEL] xato: {e}", exc_info=True)
+
+
 # ─── Status o'zgartirish → Usergа xabar ──────────────────────
 
 @dp.callback_query(F.data.startswith("os:"))
@@ -823,7 +857,10 @@ async def main():
     def on_new_order(order_data):
         asyncio.run_coroutine_threadsafe(notify_admin_order(order_data), loop)
 
-    watch = db.listen_to_new_orders(on_new_order)
+    def on_order_cancelled(order_data):
+        asyncio.run_coroutine_threadsafe(notify_admin_cancel(order_data), loop)
+
+    watch = db.listen_to_new_orders(on_new_order, on_order_cancelled)
     logger.info("[BOT] Ishga tushdi ✅")
 
     try:

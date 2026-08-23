@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ExternalLink, ShoppingBag, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, ExternalLink, Loader2, ShoppingBag, SlidersHorizontal, X } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl, openBotDeepLink } from '../utils/telegram'
 import { formatOrderDate } from '../utils/date'
+import { apiPost, ApiError } from '../lib/api'
+import { hapticSuccess, hapticError } from '../utils/telegram'
 import { PageHeader } from '../components/layout/PageHeader'
 import { useT, type TranslationKey } from '../i18n'
 import type { Order, OrderStatus } from '../types/domain'
@@ -32,15 +34,37 @@ type Props = {
   onSearch: () => void
   onOpenCart: () => void
   onGoToCatalog: () => void
+  onNotify: (message: string) => void
 }
 
+/** Mijoz faqat shu statuslardagi buyurtmani bekor qila oladi. */
+const CANCELLABLE: OrderStatus[] = ['Yangi', 'Qabul qilindi']
+
 export function OrdersPage({
-  orders, authReady, isAuthenticated, cartCount, onSearch, onOpenCart, onGoToCatalog,
+  orders, authReady, isAuthenticated, cartCount, onSearch, onOpenCart, onGoToCatalog, onNotify,
 }: Props) {
   const t = useT()
   const [active, setActive] = useState('all')
   const [newest, setNewest] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  const handleCancel = async (orderId: string) => {
+    if (cancellingId) return
+    if (!window.confirm(t('orders.cancelConfirm'))) return
+
+    setCancellingId(orderId)
+    try {
+      await apiPost('/api/order-cancel', { orderId })
+      hapticSuccess()
+      onNotify(t('orders.cancelled'))
+    } catch (error) {
+      hapticError()
+      onNotify(error instanceof ApiError ? error.message : t('reviews.error'))
+    } finally {
+      setCancellingId(null)
+    }
+  }
 
   const filtered = useMemo(() => {
     if (active === 'all') return orders
@@ -174,6 +198,25 @@ export function OrdersPage({
                     </div>
                   ))}
                 </div>
+              )}
+
+              {CANCELLABLE.includes(order.status) && (
+                <button
+                  onClick={() => handleCancel(order.id)}
+                  disabled={cancellingId === order.id}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition active:scale-95 disabled:opacity-60"
+                  style={{
+                    background: 'var(--surface-2)',
+                    color: 'var(--danger)',
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  {cancellingId === order.id ? (
+                    <><Loader2 size={15} className="animate-spin" />{t('orders.cancelling')}</>
+                  ) : (
+                    <><X size={15} />{t('orders.cancel')}</>
+                  )}
+                </button>
               )}
 
               {payInfo?.needsAction && (

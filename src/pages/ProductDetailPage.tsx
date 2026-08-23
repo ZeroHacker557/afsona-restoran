@@ -5,7 +5,8 @@ import { formatPrice } from '../data'
 import { getImageUrl, hapticSuccess, getTelegramUser, showAlert } from '../utils/telegram'
 import { formatDate } from '../utils/date'
 import { CartButton } from '../components/ui/CartButton'
-import { addReview, subscribeToProductReviews } from '../lib/firebase'
+import { subscribeToProductReviews } from '../lib/firebase'
+import { apiPost, ApiError } from '../lib/api'
 import { useT } from '../i18n'
 import type { Product, Review } from '../types/domain'
 
@@ -44,6 +45,7 @@ export function ProductDetailPage({
   const [userRating, setUserRating] = useState(0)
   const [userComment, setUserComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [reviewNotice, setReviewNotice] = useState('')
   const tgUser = getTelegramUser()
 
   useEffect(() => {
@@ -62,20 +64,21 @@ export function ProductDetailPage({
     if (userRating === 0) return showAlert(t('reviews.needRating'))
 
     setIsSubmitting(true)
+    setReviewNotice('')
     try {
-      await addReview({
+      // Server sotib olganini tekshiradi va mahsulot reytingini
+      // qayta hisoblaydi (9- va 10-bandlar)
+      await apiPost('/api/reviews', {
         productId: product.id,
-        userId: tgUser.id,
-        userName: `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(),
         rating: userRating,
         comment: userComment.trim(),
-        date: new Date().toISOString(),
       })
       hapticSuccess()
       setUserRating(0)
       setUserComment('')
-    } catch {
-      showAlert(t('reviews.error'))
+      setReviewNotice(t('reviews.thanks'))
+    } catch (error) {
+      setReviewNotice(error instanceof ApiError ? error.message : t('reviews.error'))
     } finally {
       setIsSubmitting(false)
     }
@@ -272,6 +275,12 @@ export function ProductDetailPage({
             <button type="submit" disabled={isSubmitting || userRating === 0} className="btn-primary mt-4 w-full py-3 text-sm">
               {isSubmitting ? t('reviews.submitting') : t('reviews.submit')}
             </button>
+
+            {reviewNotice && (
+              <p className="mt-3 text-center text-xs font-bold" style={{ color: 'var(--muted)' }}>
+                {reviewNotice}
+              </p>
+            )}
           </form>
 
           <div className="mt-6 space-y-4">
