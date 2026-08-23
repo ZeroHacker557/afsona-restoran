@@ -46,6 +46,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ token })
   } catch (error) {
     console.error('[auth] xato:', error)
-    return fail(res, 500, 'Autentifikatsiya amalga oshmadi')
+    // VAQTINCHA: Vercel loglarini o'qib bo'lmagani uchun xatoning
+    // asl matnini javobga qo'shamiz. Sozlash tugagach olib tashlanadi.
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    return res.status(500).json({ error: 'Autentifikatsiya amalga oshmadi', detail })
   }
 }

@@ -61,7 +61,19 @@ export async function adminAuth(): Promise<Auth> {
   return getAuth(await createApp())
 }
 
+let cachedDb: Firestore | null = null
+
 export async function adminDb(): Promise<Firestore> {
+  if (cachedDb) return cachedDb
+
   const { getFirestore } = await import('firebase-admin/firestore')
-  return getFirestore(await createApp())
+  const db = getFirestore(await createApp())
+
+  // Serverless muhitda gRPC ishlamaydi: bundler @google-cloud/firestore
+  // ning protobuf fayllarini tashlab ketadi va har qanday so'rov
+  // tushunarsiz xato bilan yiqiladi. REST rejimi bu muammoni chetlab o'tadi.
+  db.settings({ preferRest: true })
+
+  cachedDb = db
+  return cachedDb
 }
