@@ -700,3 +700,58 @@ def get_analytics(days: int = 7) -> dict:
         print(f"[ERR] get_analytics: {e}")
 
     return result
+
+
+def count_products_in_category(name: str) -> int:
+    try:
+        docs = db.collection("products").where("category", "==", name).get()
+        return len(list(docs))
+    except Exception as e:
+        print(f"[ERR] count_products_in_category: {e}")
+        return 0
+
+
+def rename_category(cat_id: str | int, new_name: str) -> int:
+    """
+    Kategoriya nomini o'zgartiradi.
+
+    MUHIM: mahsulotlarda kategoriya NOMI saqlanadi, id emas. Shuning uchun
+    faqat kategoriya hujjatini yangilash yetmaydi — o'sha nomdagi barcha
+    mahsulotlarni ham yangilash kerak, aks holda ular bog'lanishini
+    yo'qotadi va katalogda ko'rinmay qoladi.
+
+    Yangilangan mahsulotlar sonini qaytaradi.
+    """
+    new_name = new_name.strip()
+    if not new_name:
+        return 0
+
+    ref = db.collection("categories").document(str(cat_id))
+    snap = ref.get()
+    if not snap.exists:
+        return 0
+
+    old_name = (snap.to_dict() or {}).get("name", "")
+    if old_name == new_name:
+        return 0
+
+    ref.update({"name": new_name})
+
+    updated = 0
+    try:
+        products = db.collection("products").where("category", "==", old_name).get()
+        batch = db.batch()
+        for i, doc in enumerate(products, 1):
+            batch.update(doc.reference, {"category": new_name})
+            updated += 1
+            # Firestore batch chegarasi — 500 ta amal
+            if i % 400 == 0:
+                batch.commit()
+                batch = db.batch()
+        if updated % 400 != 0 or updated == 0:
+            batch.commit()
+    except Exception as e:
+        print(f"[ERR] rename_category (mahsulotlar): {e}")
+
+    print(f"[OK] Kategoriya: '{old_name}' -> '{new_name}' ({updated} ta mahsulot)")
+    return updated

@@ -24,6 +24,10 @@ router = Router()
 class AddCategory(StatesGroup):
     name = State()
 
+
+class RenameCategory(StatesGroup):
+    name = State()
+
 class BroadcastMenu(StatesGroup):
     message = State()
 
@@ -239,17 +243,24 @@ async def cb_categories(callback: CallbackQuery):
 
     buttons = []
     for c in cats:
+        count = db.count_products_in_category(c["name"])
         buttons.append([
-            InlineKeyboardButton(text=f"📂 {c['name']}", callback_data=f"cat_view_{c['id']}"),
+            InlineKeyboardButton(
+                text=f"✏️ {c['name']} ({count})",
+                callback_data=f"cat_edit_{c['id']}",
+            ),
             InlineKeyboardButton(text="🗑", callback_data=f"cat_del_{c['id']}")
         ])
     buttons.append([InlineKeyboardButton(text="➕ Kategoriya qo'shish", callback_data="admin_add_category")])
     buttons.append([InlineKeyboardButton(text="◀️ Admin panel", callback_data="admin_menu")])
 
-    await safe_edit_msg(callback, 
-        f"📂 <b>Kategoriyalar</b> ({len(cats)} ta)\n\nO'chirish uchun 🗑 tugmasini bosing:",
+    await safe_edit_msg(
+        callback,
+        f"📂 <b>Kategoriyalar</b> ({len(cats)} ta)\n\n"
+        "Nomini o'zgartirish uchun kategoriya ustiga, o'chirish uchun 🗑 bosing.\n"
+        "<i>Qavs ichida — shu kategoriyadagi mahsulotlar soni.</i>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
 
 
@@ -274,6 +285,88 @@ async def process_category_name(message: Message, state: FSMContext):
         f"✅ Kategoriya qo'shildi: <b>{cat['name']}</b>",
         reply_markup=back_to_menu_kb(),
         parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data.startswith("cat_edit_"))
+async def cb_rename_category(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    cat_id = callback.data[len("cat_edit_"):]
+    cat = db.get_category_by_id(cat_id)
+    if not cat:
+        await callback.answer("Kategoriya topilmadi", show_alert=True)
+        return
+
+    count = db.count_products_in_category(cat["name"])
+
+    await state.update_data(rename_cat_id=cat_id)
+    await state.set_state(RenameCategory.name)
+
+    text = f"✏️ <b>Kategoriya nomini o'zgartirish</b>\n\n"
+    text += f"Hozirgi nom: <b>{cat['name']}</b>\n"
+    text += f"Mahsulotlar: <b>{count}</b> ta\n\n"
+    text += "Yangi nomni yozing:"
+    if count:
+        text += (
+            f"\n\n<i>Nom o'zgarganda shu kategoriyadagi {count} ta mahsulot "
+            "ham avtomatik yangilanadi.</i>"
+        )
+    text += "\n\n<i>Bekor qilish uchun /cancel</i>"
+
+    await callback.message.answer(text, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.message(RenameCategory.name)
+async def process_rename_category(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+
+    raw = (message.text or "").strip()
+    if raw == "/cancel":
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=back_to_menu_kb())
+        return
+
+    if not raw:
+        await message.answer("Nom bo'sh bo'lmasligi kerak.")
+        return
+    if len(raw) > 60:
+        await message.answer("Nom juda uzun — 60 belgidan oshmasin.")
+        return
+
+    data = await state.get_data()
+    cat_id = data.get("rename_cat_id")
+    cat = db.get_category_by_id(cat_id)
+    if not cat:
+        await state.clear()
+        await message.answer("Kategoriya topilmadi.", reply_markup=back_to_menu_kb())
+        return
+
+    # Bir xil nomli kategoriya bormi?
+    for other in db.get_categories():
+        if str(other["id"]) != str(cat_id) and other["name"].lower() == raw.lower():
+            await message.answer("Bunday nomli kategoriya allaqachon bor. Boshqa nom kiriting.")
+            return
+
+    old_name = cat["name"]
+    updated = db.rename_category(cat_id, raw)
+    await state.clear()
+
+    text = f"✅ Kategoriya nomi o'zgartirildi:\n<b>{old_name}</b> → <b>{raw}</b>"
+    if updated:
+        text += f"\n\n📦 {updated} ta mahsulot yangi nomga o'tkazildi."
+
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📂 Kategoriyalar", callback_data="admin_categories")],
+            [InlineKeyboardButton(text="◀️ Admin panel", callback_data="admin_menu")],
+        ]),
     )
 
 
