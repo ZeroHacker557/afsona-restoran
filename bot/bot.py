@@ -17,7 +17,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.client.default import DefaultBotProperties
 
 # Karta ma'lumoti config.py dan emas, settings/payment hujjatidan olinadi (F-07)
-from config import BOT_TOKEN, ADMIN_IDS, MINI_APP_URL
+from config import BOT_TOKEN, MINI_APP_URL
+# Adminlar ro'yxati dinamik — panel orqali qo'shiladi/o'chiriladi
+from admins import all_admins, is_admin
 from admin import router as admin_router
 import firebase_db as db
 
@@ -48,7 +50,7 @@ STATUS_EMOJI = {
 
 # ─── Klaviaturalar ────────────────────────────────────────────
 
-def main_kb(is_admin: bool = False):
+def main_kb(admin: bool = False):
     rows = [
         # Oddiy tugma — bosilganda pastdagi menyu tugmasiga yo'naltiradi.
         # Mini app faqat yozuv maydoni yonidagi "🛍 Katalog" orqali ochiladi.
@@ -56,7 +58,7 @@ def main_kb(is_admin: bool = False):
         [KeyboardButton(text="📦 Buyurtmalarim")],
         [KeyboardButton(text="📞 Biz bilan aloqa"), KeyboardButton(text="ℹ️ Yordam")]
     ]
-    if is_admin:
+    if admin:
         rows.append([KeyboardButton(text="🛠 Admin Panel")])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
@@ -309,7 +311,7 @@ async def notify_admin_order(order_data: dict):
         if pay_method == "Karta":
             text += "\n💳 <b>To'lov:</b> ⏳ Chek kutilmoqda"
 
-        for admin_id in ADMIN_IDS:
+        for admin_id in all_admins():
             try:
                 await bot.send_message(admin_id, text,
                                        reply_markup=order_action_kb(doc_id, has_location),
@@ -379,7 +381,7 @@ async def notify_admin_cancel(order_data: dict):
             text += f"  \u2022 {prod.get('name', '?')} \u00d7 {item.get('quantity', 1)}\n"
         text += "\n<i>Mijozning o'zi bekor qildi. Ombor qoldig'i qaytarildi.</i>"
 
-        for admin_id in ADMIN_IDS:
+        for admin_id in all_admins():
             try:
                 await bot.send_message(admin_id, text)
             except Exception as e:
@@ -394,7 +396,7 @@ async def notify_admin_cancel(order_data: dict):
 
 @dp.callback_query(F.data.startswith("os:"))
 async def cb_order_status(callback: CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
+    if not is_admin(callback.from_user.id):
         return
 
     # order_id — Firestore hujjat id'si (F-03)
@@ -469,7 +471,7 @@ async def handle_receipt_photo(message: Message, state: FSMContext):
     caption = build_receipt_caption(order, display_id)
 
     try:
-        for admin_id in ADMIN_IDS:
+        for admin_id in all_admins():
             try:
                 await bot.send_photo(admin_id,
                                      photo=message.photo[-1].file_id,
@@ -498,7 +500,7 @@ async def handle_receipt_wrong(message: Message):
 
 @dp.callback_query(F.data.startswith("pconf:"))
 async def cb_payment_confirm(callback: CallbackQuery):
-    if callback.from_user.id not in ADMIN_IDS:
+    if not is_admin(callback.from_user.id):
         await callback.answer("Sizda ruxsat yo'q", show_alert=True)
         return
 
@@ -570,7 +572,7 @@ async def cb_send_location(callback: CallbackQuery):
     Havola emas, venue xabari — uni kuryerga oddiy forward qilish
     mumkin va u xaritada ochiladi.
     """
-    if callback.from_user.id not in ADMIN_IDS:
+    if not is_admin(callback.from_user.id):
         await callback.answer("Sizda ruxsat yo'q", show_alert=True)
         return
 
@@ -690,7 +692,7 @@ async def handle_my_orders(message: Message):
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(message: Message, state: FSMContext):
     user     = message.from_user
-    is_admin = user.id in ADMIN_IDS
+    admin = is_admin(user.id)
 
     # ── Deep link: /start receipt_<hujjat_id> ──
     # Yangi havolalar Firestore hujjat id'sini yuboradi. Eski havolalarda
@@ -734,12 +736,12 @@ async def cmd_start(message: Message, state: FSMContext):
             u_text += f"<code>{pay_cfg['cardNumber']}</code>\n"
             u_text += f"👤 Egasi: <b>{pay_cfg['cardOwner']}</b>\n\n"
             u_text += "📸 Pul o'tkazgandan so'ng <b>to'lov chekini (screenshot)</b> yuboring:"
-            await message.answer(u_text, reply_markup=main_kb(is_admin))
+            await message.answer(u_text, reply_markup=main_kb(admin))
         else:
             await message.answer(
                 "❌ Buyurtma topilmadi.\n"
                 "Iltimos, mini appdagi «To'lov chekini yuborish» tugmasini qayta bosing.",
-                reply_markup=main_kb(is_admin)
+                reply_markup=main_kb(admin)
             )
         return
 
@@ -750,7 +752,7 @@ async def cmd_start(message: Message, state: FSMContext):
         "🛍 <b>Katalog orqali o'zingizga yoqqan mahsulotlarni tanlang va oson buyurtma bering.</b>\n\n"
         "👇 <i>Xaridni boshlash uchun quyidagi tugmani bosing:</i>"
     )
-    await message.answer(text, reply_markup=main_kb(is_admin))
+    await message.answer(text, reply_markup=main_kb(admin))
 
     # Telefon raqami hali saqlanmagan bo'lsa, bir bosishda so'raymiz.
     # Mini app buni buyurtma formasiga avtomatik qo'yadi (F-26).
@@ -779,7 +781,7 @@ async def handle_contact(message: Message):
         )
         return
 
-    is_admin = message.from_user.id in ADMIN_IDS
+    admin = is_admin(message.from_user.id)
     phone = contact.phone_number
     if not phone.startswith("+"):
         phone = f"+{phone}"
@@ -788,12 +790,12 @@ async def handle_contact(message: Message):
         await message.answer(
             f"✅ Raqamingiz saqlandi: <code>{phone}</code>\n\n"
             "Endi buyurtma berishda u avtomatik to'ldiriladi.",
-            reply_markup=main_kb(is_admin),
+            reply_markup=main_kb(admin),
         )
     else:
         await message.answer(
             "❌ Raqamni saqlab bo'lmadi. Keyinroq qayta urinib ko'ring.",
-            reply_markup=main_kb(is_admin),
+            reply_markup=main_kb(admin),
         )
 
 

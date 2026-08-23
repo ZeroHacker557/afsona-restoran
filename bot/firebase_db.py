@@ -755,3 +755,68 @@ def rename_category(cat_id: str | int, new_name: str) -> int:
 
     print(f"[OK] Kategoriya: '{old_name}' -> '{new_name}' ({updated} ta mahsulot)")
     return updated
+
+
+# ─── Adminlar ─────────────────────────────────────────────────
+#
+# config.py dagi ADMIN_IDS — egalar, ular bu yerda saqlanmaydi.
+# Panel orqali qo'shilgan adminlar settings/admins hujjatida.
+
+_ADMINS_DOC = ("settings", "admins")
+
+
+def get_extra_admin_ids() -> set:
+    try:
+        snap = db.collection(_ADMINS_DOC[0]).document(_ADMINS_DOC[1]).get()
+        if not snap.exists:
+            return set()
+        ids = (snap.to_dict() or {}).get("ids") or []
+        return {int(x) for x in ids}
+    except Exception as e:
+        print(f"[ERR] get_extra_admin_ids: {e}")
+        return set()
+
+
+def add_extra_admin(user_id: int) -> bool:
+    try:
+        ref = db.collection(_ADMINS_DOC[0]).document(_ADMINS_DOC[1])
+        current = get_extra_admin_ids()
+        current.add(int(user_id))
+        ref.set({"ids": sorted(current)}, merge=True)
+        print(f"[OK] Admin qo'shildi: {user_id}")
+        return True
+    except Exception as e:
+        print(f"[ERR] add_extra_admin: {e}")
+        return False
+
+
+def remove_extra_admin(user_id: int) -> bool:
+    try:
+        ref = db.collection(_ADMINS_DOC[0]).document(_ADMINS_DOC[1])
+        current = get_extra_admin_ids()
+        current.discard(int(user_id))
+        ref.set({"ids": sorted(current)}, merge=True)
+        print(f"[DEL] Admin o'chirildi: {user_id}")
+        return True
+    except Exception as e:
+        print(f"[ERR] remove_extra_admin: {e}")
+        return False
+
+
+def find_users(query: str, limit: int = 10) -> list:
+    """Ism yoki username bo'yicha foydalanuvchi qidirish (admin qo'shish uchun)."""
+    q = (query or "").strip().lower().lstrip("@")
+    result = []
+    try:
+        for doc in db.collection("users").get():
+            d = doc.to_dict() or {}
+            name = f"{d.get('first_name', '')} {d.get('last_name', '')}".strip().lower()
+            username = (d.get("username") or "").lower()
+            if not q or q in name or q in username or q == str(d.get("id", "")):
+                d["id"] = d.get("id") or doc.id
+                result.append(d)
+            if len(result) >= limit:
+                break
+    except Exception as e:
+        print(f"[ERR] find_users: {e}")
+    return result

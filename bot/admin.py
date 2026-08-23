@@ -13,7 +13,7 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from config import ADMIN_IDS, IMAGES_DIR
+from config import IMAGES_DIR
 import firebase_db as db
 
 router = Router()
@@ -27,6 +27,10 @@ class AddCategory(StatesGroup):
 
 class RenameCategory(StatesGroup):
     name = State()
+
+
+class AddAdmin(StatesGroup):
+    query = State()
 
 class BroadcastMenu(StatesGroup):
     message = State()
@@ -62,8 +66,9 @@ class DeliverySettings(StatesGroup):
 
 # ─── Helpers ─────────────────────────────────────────────────
 
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
+# is_admin va boshqalar admins.py da — ro'yxat Firestore'dan keladi
+import admins as admins_module  # noqa: E402
+from admins import all_admins, is_admin, is_owner  # noqa: E402
 
 
 def admin_menu_kb():
@@ -79,6 +84,7 @@ def admin_menu_kb():
          InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats")],
         [InlineKeyboardButton(text="📈 Sotuv hisoboti", callback_data="report_7"),
          InlineKeyboardButton(text="👀 Analitika", callback_data="analytics_7")],
+        [InlineKeyboardButton(text="👥 Adminlar", callback_data="admin_admins")],
     ])
 
 
@@ -1834,3 +1840,204 @@ def analytics_kb(active: int) -> InlineKeyboardMarkup:
         row,
         [InlineKeyboardButton(text="\u25c0\ufe0f Admin panel", callback_data="admin_menu")],
     ])
+
+
+# ─── Adminlarni boshqarish ───────────────────────────────────
+
+def describe_user(user: dict) -> str:
+    """Foydalanuvchini ko'rsatish uchun qisqa nom."""
+    name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+    username = user.get("username")
+    if name and username:
+        return f"{name} (@{username})"
+    if username:
+        return f"@{username}"
+    return name or f"ID {user.get('id')}"
+
+
+@router.callback_query(F.data == "admin_admins")
+async def cb_admins(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    await state.clear()
+    ids = sorted(all_admins())
+
+    text = f"\U0001f465 <b>Adminlar</b> ({len(ids)} ta)\n"
+    text += "\u2501" * 22 + "\n\n"
+
+    rows = []
+    for uid in ids:
+        user = db.get_user(uid) or {}
+        label = describe_user({**user, "id": uid})
+        owner = is_owner(uid)
+
+        mark = "👑" if owner else "👤"
+        text += mark + " " + label + "\n"
+        text += "    <code>" + str(uid) + "</code>\n"
+
+        if not owner:
+            rows.append([InlineKeyboardButton(
+                text=f"\U0001f5d1 {label[:28]}",
+                callback_data=f"admdel_{uid}",
+            )])
+
+    text += "\n<i>\U0001f451 \u2014 egasi, uni o'chirib bo'lmaydi.</i>"
+
+    rows.append([InlineKeyboardButton(text="\u2795 Admin qo'shish", callback_data="admin_add_admin")])
+    rows.append([InlineKeyboardButton(text="\u25c0\ufe0f Admin panel", callback_data="admin_menu")])
+
+    await safe_edit(callback, text, InlineKeyboardMarkup(inline_keyboard=rows))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_add_admin")
+async def cb_add_admin(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    await state.set_state(AddAdmin.query)
+    await callback.message.answer(
+        "\u2795 <b>Admin qo'shish</b>\n\n"
+        "Quyidagilardan birini yuboring:\n\n"
+        "\u2022 Foydalanuvchi <b>ismi</b> yoki <b>@username</b> \u2014 "
+        "botdan foydalanganlar ichidan qidiraman\n"
+        "\u2022 Telegram <b>ID raqami</b>\n"
+        "\u2022 O'sha odamning xabarini <b>forward</b> qiling\n\n"
+        "<i>Bekor qilish uchun /cancel</i>",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(AddAdmin.query)
+async def process_add_admin(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+
+    raw = (message.text or "").strip()
+    if raw == "/cancel":
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=back_to_menu_kb())
+        return
+
+    # Forward qilingan xabardan
+    forwarded = getattr(message, "forward_from", None)
+    if forwarded:
+        await finish_add_admin(message, state, forwarded.id, describe_user({
+            "first_name": forwarded.first_name,
+            "last_name": forwarded.last_name,
+            "username": forwarded.username,
+            "id": forwarded.id,
+        }))
+        return
+
+    if not raw:
+        await message.answer("Ism, @username yoki ID yuboring.")
+        return
+
+    # To'g'ridan-to'g'ri ID
+    if raw.isdigit():
+        uid = int(raw)
+        user = db.get_user(uid) or {"id": uid}
+        await finish_add_admin(message, state, uid, describe_user(user))
+        return
+
+    # Nom yoki username bo'yicha qidiramiz
+    found = db.find_users(raw, limit=8)
+    if not found:
+        await message.answer(
+            "Bunday foydalanuvchi topilmadi.\n\n"
+            "<i>Faqat botdan foydalangan odamlarni qidira olaman. "
+            "Topilmasa, uning Telegram ID raqamini yuboring yoki "
+            "xabarini forward qiling.</i>",
+            parse_mode="HTML",
+        )
+        return
+
+    rows = [
+        [InlineKeyboardButton(
+            text=describe_user(u)[:40],
+            callback_data=f"admadd_{u.get('id')}",
+        )]
+        for u in found
+    ]
+    rows.append([InlineKeyboardButton(text="\u274c Bekor qilish", callback_data="admin_admins")])
+
+    await state.clear()
+    await message.answer(
+        f"\U0001f50d <b>{len(found)} ta foydalanuvchi topildi</b>\n\nAdmin qilmoqchi bo'lganingizni tanlang:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+async def finish_add_admin(message: Message, state: FSMContext, uid: int, label: str):
+    await state.clear()
+
+    if not admins_module.add(uid):
+        await message.answer(
+            f"<b>{label}</b> allaqachon admin.",
+            parse_mode="HTML",
+            reply_markup=back_to_menu_kb(),
+        )
+        return
+
+    await message.answer(
+        f"\u2705 <b>{label}</b> admin qilindi.\n\n"
+        "<i>U /start bosganda admin paneli tugmasi paydo bo'ladi.</i>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="\U0001f465 Adminlar", callback_data="admin_admins")],
+            [InlineKeyboardButton(text="\u25c0\ufe0f Admin panel", callback_data="admin_menu")],
+        ]),
+    )
+
+
+@router.callback_query(F.data.startswith("admadd_"))
+async def cb_confirm_add_admin(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    try:
+        uid = int(callback.data[len("admadd_"):])
+    except ValueError:
+        await callback.answer("Noto'g'ri ID", show_alert=True)
+        return
+
+    user = db.get_user(uid) or {"id": uid}
+    if admins_module.add(uid):
+        await callback.answer(f"{describe_user(user)} admin qilindi")
+    else:
+        await callback.answer("Allaqachon admin", show_alert=True)
+
+    await state.clear()
+    await cb_admins(callback, state)
+
+
+@router.callback_query(F.data.startswith("admdel_"))
+async def cb_remove_admin(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    try:
+        uid = int(callback.data[len("admdel_"):])
+    except ValueError:
+        await callback.answer("Noto'g'ri ID", show_alert=True)
+        return
+
+    if is_owner(uid):
+        await callback.answer("Egani o'chirib bo'lmaydi", show_alert=True)
+        return
+
+    user = db.get_user(uid) or {"id": uid}
+    if admins_module.remove(uid):
+        await callback.answer(f"{describe_user(user)} adminlikdan olindi")
+    else:
+        await callback.answer("O'chirilmadi", show_alert=True)
+
+    await cb_admins(callback, state)
