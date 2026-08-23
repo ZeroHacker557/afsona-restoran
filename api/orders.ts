@@ -87,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let uid: string
   try {
-    const decoded = await adminAuth().verifyIdToken(idToken)
+    const decoded = await (await adminAuth()).verifyIdToken(idToken)
     uid = decoded.uid
   } catch {
     return fail(res, 401, 'Sessiya eskirgan, ilovani qayta oching')
@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return fail(res, 400, error instanceof Error ? error.message : "Ma'lumot noto'g'ri")
   }
 
-  const db = adminDb()
+  const db = await adminDb()
   const userId = Number(uid)
 
   try {

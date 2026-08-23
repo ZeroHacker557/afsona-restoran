@@ -1,15 +1,32 @@
-import { cert, getApps, initializeApp, type App } from 'firebase-admin/app'
-import { getAuth } from 'firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
+import type { App } from 'firebase-admin/app'
+import type { Auth } from 'firebase-admin/auth'
+import type { Firestore } from 'firebase-admin/firestore'
 
 /**
  * Serverless funksiyalar uchun firebase-admin.
+ *
+ * MUHIM: firebase-admin faqat KERAK BO'LGANDA yuklanadi (dynamic import).
+ * Modul darajasida import qilinsa, kutubxona yuklanishida yuzaga kelgan
+ * har qanday muammo butun funksiyani ishga tushmaydigan qilib qo'yadi va
+ * Vercel FUNCTION_INVOCATION_FAILED qaytaradi — mijoz esa hech qanday
+ * tushunarli xato ko'rmaydi.
+ *
  * Service account JSON butunligicha FIREBASE_SERVICE_ACCOUNT env
- * o'zgaruvchisida saqlanadi (Vercel Environment Variables).
+ * o'zgaruvchisida saqlanadi.
  */
-function createApp(): App {
+
+let cachedApp: App | null = null
+
+async function createApp(): Promise<App> {
+  if (cachedApp) return cachedApp
+
+  const { cert, getApps, initializeApp } = await import('firebase-admin/app')
+
   const existing = getApps()
-  if (existing.length) return existing[0]
+  if (existing.length) {
+    cachedApp = existing[0]
+    return cachedApp
+  }
 
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT
   if (!raw) {
@@ -23,20 +40,28 @@ function createApp(): App {
     throw new Error('FIREBASE_SERVICE_ACCOUNT yaroqli JSON emas')
   }
 
-  return initializeApp({
+  if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT to‘liq emas')
+  }
+
+  cachedApp = initializeApp({
     credential: cert({
       projectId: parsed.project_id,
       clientEmail: parsed.client_email,
-      // Vercel env'da yangi qatorlar \n ko'rinishida saqlanadi
-      privateKey: (parsed.private_key || '').replace(/\n/g, '\n'),
+      // Env o'zgaruvchida yangi qatorlar \n ko'rinishida qolgan bo'lishi mumkin
+      privateKey: parsed.private_key.replace(/\\n/g, '\n'),
     }),
   })
+
+  return cachedApp
 }
 
-export function adminAuth() {
-  return getAuth(createApp())
+export async function adminAuth(): Promise<Auth> {
+  const { getAuth } = await import('firebase-admin/auth')
+  return getAuth(await createApp())
 }
 
-export function adminDb() {
-  return getFirestore(createApp())
+export async function adminDb(): Promise<Firestore> {
+  const { getFirestore } = await import('firebase-admin/firestore')
+  return getFirestore(await createApp())
 }

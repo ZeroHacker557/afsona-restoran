@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let uid: string
   try {
-    uid = (await adminAuth().verifyIdToken(idToken)).uid
+    uid = (await (await adminAuth()).verifyIdToken(idToken)).uid
   } catch {
     return fail(res, 401, 'Sessiya eskirgan, ilovani qayta oching')
   }
@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!code) return fail(res, 400, 'Promokod kiritilmagan')
 
   try {
-    const snap = await adminDb()
+    const snap = await (await adminDb())
       .collection('promocodes')
       .where('code', '==', code)
       .limit(1)

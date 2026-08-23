@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Profil ma'lumotini serverda yangilaymiz — mijozga ishonmaymiz
-    await adminDb().collection('users').doc(uid).set(
+    await (await adminDb()).collection('users').doc(uid).set(
       {
         id: user.id,
         first_name: user.first_name,
@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { merge: true },
     )
 
-    const token = await adminAuth().createCustomToken(uid, { telegramId: user.id })
+    const token = await (await adminAuth()).createCustomToken(uid, { telegramId: user.id })
     return res.status(200).json({ token })
   } catch (error) {
     console.error('[auth] xato:', error)
