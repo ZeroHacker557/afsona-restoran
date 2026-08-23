@@ -7,6 +7,7 @@ import { formatDate } from '../utils/date'
 import { CartButton } from '../components/ui/CartButton'
 import { subscribeToProductReviews } from '../lib/firebase'
 import { apiPost, ApiError } from '../lib/api'
+import { track } from '../lib/track'
 import { useT } from '../i18n'
 import type { Product, Review } from '../types/domain'
 
@@ -51,6 +52,11 @@ export function ProductDetailPage({
   useEffect(() => {
     const unsub = subscribeToProductReviews(product.id, setReviews)
     return () => unsub()
+  }, [product.id])
+
+  // Analitika: mahsulot ko'rildi (12-band)
+  useEffect(() => {
+    track('view', product.id)
   }, [product.id])
 
   const avgRating = reviews.length > 0

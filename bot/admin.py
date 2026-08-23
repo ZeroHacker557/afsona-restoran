@@ -5,7 +5,7 @@ import asyncio
 import os
 import uuid
 from aiogram import Router, F, Bot
-from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.types import (
     Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
     FSInputFile
@@ -73,7 +73,8 @@ def admin_menu_kb():
          InlineKeyboardButton(text="📢 Xabarnoma", callback_data="admin_broadcast")],
         [InlineKeyboardButton(text="🚚 Yetkazib berish", callback_data="admin_delivery"),
          InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats")],
-        [InlineKeyboardButton(text="📈 Sotuv hisoboti", callback_data="report_7")],
+        [InlineKeyboardButton(text="📈 Sotuv hisoboti", callback_data="report_7"),
+         InlineKeyboardButton(text="👀 Analitika", callback_data="analytics_7")],
     ])
 
 
@@ -83,19 +84,47 @@ def back_to_menu_kb():
     ])
 
 
-async def safe_edit(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None = None):
+async def safe_edit_msg(callback: CallbackQuery, text: str, reply_markup=None,
+                        parse_mode: str | None = "HTML", **kwargs):
     """
-    Xabarni tahrirlaydi. Agar xabar rasmli bo'lsa (edit_text ishlamaydi),
-    eskisini o'chirib yangisini yuboradi.
+    Xabarni xavfsiz tahrirlaydi.
+
+    Mahsulot rasm bilan ko'rsatilgandan keyin har qanday "orqaga" tugmasi
+    o'sha RASMLI xabarni tahrirlashga urinadi, Telegram esa
+    "there is no text in the message to edit" deb rad etadi. Bunday holatda
+    eski xabarni o'chirib, yangisini yuboramiz.
+
+    "message is not modified" xatosi ham zararsiz — e'tiborsiz qoldiriladi.
     """
     try:
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await callback.message.edit_text(
+            text, reply_markup=reply_markup, parse_mode=parse_mode, **kwargs
+        )
+        return
+    except TelegramBadRequest as e:
+        detail = str(e).lower()
+        if "message is not modified" in detail:
+            return
+        if not ("no text in the message" in detail
+                or "message can't be edited" in detail
+                or "message to edit not found" in detail):
+            raise
     except Exception:
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-        await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        pass
+
+    # Tahrirlab bo'lmadi — eskisini o'chirib yangisini yuboramiz
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.message.answer(
+        text, reply_markup=reply_markup, parse_mode=parse_mode, **kwargs
+    )
+
+
+async def safe_edit(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None = None):
+    """Qisqa yozuv: safe_edit_msg ustidan."""
+    await safe_edit_msg(callback, text, reply_markup=kb, parse_mode="HTML")
 
 
 def stock_mark(product: dict) -> str:
@@ -154,7 +183,7 @@ async def cb_admin_menu(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         return
     await state.clear()
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         "🛠 <b>Admin Panel</b>\n\nQuyidagi bo'limlardan birini tanlang:",
         reply_markup=admin_menu_kb(),
         parse_mode="HTML"
@@ -177,7 +206,7 @@ async def cb_stats(callback: CallbackQuery):
     total_revenue = sum(o.get('total', 0) for o in orders if o.get('status') == 'Yetkazildi')
     active_orders = sum(1 for o in orders if o.get('status') in ['Yangi', 'Qabul qilindi', 'Yetkazilmoqda'])
     
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         f"📊 <b>Batafsil Statistika</b>\n\n"
         f"👥 Foydalanuvchilar: <b>{len(users)}</b>\n"
         f"📦 Mahsulotlar: <b>{len(products)}</b>\n"
@@ -198,7 +227,7 @@ async def cb_categories(callback: CallbackQuery):
         return
     cats = db.get_categories()
     if not cats:
-        await callback.message.edit_text(
+        await safe_edit_msg(callback, 
             "📂 <b>Kategoriyalar</b>\n\nHali kategoriya qo'shilmagan.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="➕ Kategoriya qo'shish", callback_data="admin_add_category")],
@@ -217,7 +246,7 @@ async def cb_categories(callback: CallbackQuery):
     buttons.append([InlineKeyboardButton(text="➕ Kategoriya qo'shish", callback_data="admin_add_category")])
     buttons.append([InlineKeyboardButton(text="◀️ Admin panel", callback_data="admin_menu")])
 
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         f"📂 <b>Kategoriyalar</b> ({len(cats)} ta)\n\nO'chirish uchun 🗑 tugmasini bosing:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML"
@@ -229,7 +258,7 @@ async def cb_add_category(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         return
     await state.set_state(AddCategory.name)
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         "📂 <b>Yangi kategoriya</b>\n\nKategoriya nomini yozing:",
         parse_mode="HTML"
     )
@@ -269,7 +298,7 @@ async def cb_products(callback: CallbackQuery):
         return
     products = db.get_products()
     if not products:
-        await callback.message.edit_text(
+        await safe_edit_msg(callback, 
             "📦 <b>Mahsulotlar</b>\n\nHali mahsulot qo'shilmagan.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="➕ Mahsulot qo'shish", callback_data="admin_add_product")],
@@ -291,7 +320,7 @@ async def cb_products(callback: CallbackQuery):
     buttons.append([InlineKeyboardButton(text="➕ Mahsulot qo'shish", callback_data="admin_add_product")])
     buttons.append([InlineKeyboardButton(text="◀️ Admin panel", callback_data="admin_menu")])
 
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         f"📦 <b>Mahsulotlar</b> ({len(products)} ta)\n\nKo'rish yoki o'chirish:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML"
@@ -378,7 +407,7 @@ async def cb_add_product_start(callback: CallbackQuery, state: FSMContext):
 
     cats = db.get_categories()
     if not cats:
-        await callback.message.edit_text(
+        await safe_edit_msg(callback, 
             "⚠️ Avval kamida bitta kategoriya qo'shing!",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="➕ Kategoriya qo'shish", callback_data="admin_add_category")],
@@ -391,7 +420,7 @@ async def cb_add_product_start(callback: CallbackQuery, state: FSMContext):
     buttons = [[InlineKeyboardButton(text=c["name"], callback_data=f"addprod_cat_{c['id']}")] for c in cats]
     buttons.append([InlineKeyboardButton(text="❌ Bekor qilish", callback_data="admin_menu")])
 
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         "📦 <b>Yangi mahsulot</b>\n\n1️⃣ Kategoriyani tanlang:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML"
@@ -410,7 +439,7 @@ async def cb_add_product_category(callback: CallbackQuery, state: FSMContext):
 
     await state.update_data(category=cat["name"], images=[])
     await state.set_state(AddProduct.name)
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         f"📦 <b>Yangi mahsulot</b>\n\n"
         f"📂 Kategoriya: <b>{cat['name']}</b>\n\n"
         f"2️⃣ Mahsulot nomini yozing:",
@@ -457,7 +486,7 @@ async def cb_skip_old_price(callback: CallbackQuery, state: FSMContext):
         return
     await state.update_data(oldPrice=None)
     await state.set_state(AddProduct.description)
-    await callback.message.edit_text(callback.message.html_text)
+    await safe_edit_msg(callback, callback.message.html_text)
     await callback.message.answer(
         "5️⃣ Mahsulot tavsifini yozing:",
         reply_markup=skip_kb("desc"),
@@ -492,7 +521,7 @@ async def cb_skip_desc(callback: CallbackQuery, state: FSMContext):
         return
     await state.update_data(description="")
     await state.set_state(AddProduct.sizes)
-    await callback.message.edit_text(callback.message.html_text)
+    await safe_edit_msg(callback, callback.message.html_text)
     await callback.message.answer(
         "6️⃣ Razmerlarni vergul bilan yozing.\nMasalan: <code>S, M, L, XL</code>",
         reply_markup=skip_kb("sizes"),
@@ -521,7 +550,7 @@ async def cb_skip_sizes(callback: CallbackQuery, state: FSMContext):
         return
     await state.update_data(sizes=[])
     await state.set_state(AddProduct.color)
-    await callback.message.edit_text(callback.message.html_text)
+    await safe_edit_msg(callback, callback.message.html_text)
     await callback.message.answer(
         "7️⃣ Ranglarni vergul bilan yozing.\nMasalan: <code>Qora, Oq, Qizil</code>",
         reply_markup=skip_kb("color"),
@@ -550,7 +579,7 @@ async def cb_skip_color(callback: CallbackQuery, state: FSMContext):
         return
     await state.update_data(color="")
     await state.set_state(AddProduct.discount)
-    await callback.message.edit_text(callback.message.html_text)
+    await safe_edit_msg(callback, callback.message.html_text)
     await callback.message.answer(
         "8️⃣ Chegirma foizini yozing.\nMasalan: <code>-20%</code>",
         reply_markup=skip_kb("discount"),
@@ -588,7 +617,7 @@ async def cb_skip_discount(callback: CallbackQuery, state: FSMContext):
         return
     await state.update_data(discount="")
     await state.set_state(AddProduct.stock)
-    await callback.message.edit_text(callback.message.html_text)
+    await safe_edit_msg(callback, callback.message.html_text)
     await callback.message.answer(ASK_STOCK, parse_mode="HTML")
     await callback.answer()
 
@@ -730,7 +759,7 @@ async def cb_more_images(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Ruxsat yo'q", show_alert=True)
         return
     await state.set_state(AddProduct.image)
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         "\U0001f4f7 Keyingi rasmni yuboring (rasm yoki fayl sifatida):"
     )
     await callback.answer()
@@ -767,7 +796,7 @@ async def cb_save_product(callback: CallbackQuery, state: FSMContext):
         f"🖼 {len(product.get('images', []))} ta rasm\n"
     )
 
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="➕ Yana mahsulot qo'shish", callback_data="admin_add_product")],
@@ -784,7 +813,7 @@ async def cb_broadcast(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         return
     await state.set_state(BroadcastMenu.message)
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         "📢 <b>Ommaviy xabarnoma</b>\n\nFoydalanuvchilarga yubormoqchi bo'lgan xabarni kiriting (yoki /cancel yozing):",
         reply_markup=back_to_menu_kb(),
         parse_mode="HTML"
@@ -883,7 +912,7 @@ async def cb_promocodes(callback: CallbackQuery):
         [InlineKeyboardButton(text="➕ Promokod qo'shish", callback_data="admin_add_promo")],
         [InlineKeyboardButton(text="◀️ Admin panel", callback_data="admin_menu")]
     ]
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
+    await safe_edit_msg(callback, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "admin_add_promo")
@@ -891,7 +920,7 @@ async def cb_add_promo(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         return
     await state.set_state(AddPromo.code)
-    await callback.message.edit_text("🎟 Yangi promokodni kiriting (masalan: NEWYEAR2026):", reply_markup=back_to_menu_kb())
+    await safe_edit_msg(callback, "🎟 Yangi promokodni kiriting (masalan: NEWYEAR2026):", reply_markup=back_to_menu_kb())
 
 
 @router.message(AddPromo.code)
@@ -1388,7 +1417,7 @@ async def show_orders(callback: CallbackQuery, status: str):
         kb = InlineKeyboardMarkup(inline_keyboard=rows + kb.inline_keyboard)
 
     try:
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await safe_edit_msg(callback, text, reply_markup=kb, parse_mode="HTML")
     except Exception:
         await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
@@ -1454,7 +1483,7 @@ async def cb_order_view(callback: CallbackQuery):
     ])
 
     try:
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await safe_edit_msg(callback, text, reply_markup=kb, parse_mode="HTML")
     except Exception:
         await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
@@ -1472,7 +1501,7 @@ async def cb_order_delete_confirm(callback: CallbackQuery):
         await callback.answer("Buyurtma topilmadi", show_alert=True)
         return
 
-    await callback.message.edit_text(
+    await safe_edit_msg(callback, 
         f"\u26a0\ufe0f <b>Buyurtma {db.order_display_id(order)} o'chirilsinmi?</b>\n\n"
         "Bu amalni ortga qaytarib bo'lmaydi \u2014 buyurtma butunlay o'chadi.",
         parse_mode="HTML",
@@ -1524,7 +1553,7 @@ async def cb_delivery(callback: CallbackQuery):
         [InlineKeyboardButton(text="\u25c0\ufe0f Admin panel", callback_data="admin_menu")],
     ])
     try:
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await safe_edit_msg(callback, text, reply_markup=kb, parse_mode="HTML")
     except Exception:
         await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
@@ -1653,3 +1682,62 @@ async def cb_sales_report(callback: CallbackQuery):
     text += "\n<i>Savdo summasi faqat yetkazilgan buyurtmalar bo'yicha.</i>"
 
     await safe_edit(callback, text, report_kb(days))
+
+
+# ─── Analitika (12-band) ─────────────────────────────────────
+
+@router.callback_query(F.data.startswith("analytics_"))
+async def cb_analytics(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    try:
+        days = int(callback.data[len("analytics_"):])
+    except ValueError:
+        days = 7
+
+    await callback.answer("Hisoblanmoqda...")
+    a = db.get_analytics(days)
+
+    label = dict(REPORT_PERIODS).get(days, f"{days} kun")
+
+    text = f"\U0001f440 <b>Analitika \u2014 {label}</b>\n"
+    text += "\u2501" * 22 + "\n\n"
+
+    if not a["view"]:
+        text += (
+            "Hozircha ma'lumot yig'ilmagan.\n\n"
+            "<i>Mijozlar mini appda mahsulotlarni ko'ra boshlagach "
+            "shu yerda statistika paydo bo'ladi.</i>"
+        )
+        await safe_edit(callback, text, analytics_kb(days))
+        return
+
+    text += f"\U0001f441 Mahsulot ko'rishlar: <b>{a['view']}</b>\n"
+    text += f"\U0001f6d2 Savatga qo'shishlar: <b>{a['cart_add']}</b>\n"
+    text += f"\U0001f4b3 Rasmiylashtirishga o'tish: <b>{a['checkout_start']}</b>\n"
+
+    if a["conversion"]:
+        text += f"\n\U0001f4c9 Ko'rishdan savatga: <b>{a['conversion']}%</b>\n"
+
+    if a["top_viewed"]:
+        text += "\n\U0001f525 <b>Eng ko'p ko'rilgan:</b>\n"
+        for i, item in enumerate(a["top_viewed"], 1):
+            text += f"  {i}. {item['name']} \u2014 <b>{item['views']}</b> ko'rish"
+            if item["cart_add"]:
+                text += f", {item['cart_add']} savatga"
+            text += "\n"
+
+    await safe_edit(callback, text, analytics_kb(days))
+
+
+def analytics_kb(active: int) -> InlineKeyboardMarkup:
+    row = []
+    for days, label in REPORT_PERIODS:
+        mark = "\u2022 " if days == active else ""
+        row.append(InlineKeyboardButton(text=f"{mark}{label}", callback_data=f"analytics_{days}"))
+    return InlineKeyboardMarkup(inline_keyboard=[
+        row,
+        [InlineKeyboardButton(text="\u25c0\ufe0f Admin panel", callback_data="admin_menu")],
+    ])

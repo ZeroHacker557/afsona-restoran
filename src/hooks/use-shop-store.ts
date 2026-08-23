@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { subscribeToCategories, subscribeToProducts, subscribeToUserOrders, subscribeToUserProfile, subscribeToUserNotifications, markNotificationsAsRead } from '../lib/firebase'
 import { ensureSignedIn, onAuthChanged, auth } from '../lib/auth'
 import { apiPost, ApiError } from '../lib/api'
+import { track } from '../lib/track'
+import { searchProducts } from '../utils/search'
 import type { AppPage, Category, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
 import { hapticError, hapticFeedback, hapticSuccess, initTelegram } from '../utils/telegram'
 import { applyTheme, getStoredTheme, storeTheme, type ThemeMode } from '../utils/theme'
+import { useT } from '../i18n'
 
 /** Pastki menyudagi asosiy sahifalar — ularga o'tganda tarix tozalanadi. */
 const ROOT_PAGES: AppPage[] = ['home', 'catalog', 'favorites', 'orders', 'profile']
@@ -42,6 +45,7 @@ function loadCart(): CartItems {
 }
 
 export function useShopStore() {
+  const t = useT()
   const [page, setPage] = useState<AppPage>('home')
   // Telegram BackButton shu tarix bo'yicha ishlaydi (D-03)
   const [history, setHistory] = useState<AppPage[]>([])
@@ -178,7 +182,7 @@ export function useShopStore() {
   }, [cartItems, products])
 
   const searchResults = useMemo(
-    () => products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())),
+    () => searchProducts(products, query),
     [query, products],
   )
 
@@ -288,9 +292,10 @@ export function useShopStore() {
         color: color || product.color
       }
     }))
-    notify(`${product.name} savatga qo'shildi`)
+    notify(t('product.addedToCart', { name: product.name }))
     hapticFeedback('medium')
-  }, [notify])
+    track('cart_add', product.id)
+  }, [notify, t])
 
   const updateCartQuantity = useCallback((cartKey: string, nextQuantity: number) => {
     setCartItems((current) => {
@@ -306,6 +311,7 @@ export function useShopStore() {
   const closeCart = useCallback(() => setCartOpen(false), [])
 
   const goToCheckout = useCallback(() => {
+    track('checkout_start')
     setCartOpen(false)
     setPage((current) => {
       setHistory((h) => [...h.slice(-19), current])
@@ -327,12 +333,12 @@ export function useShopStore() {
     if (isSubmitting) return false
 
     if (!orderForm.name.trim() || !orderForm.phone.trim() || !orderForm.address.trim()) {
-      notify("Iltimos, barcha maydonlarni to'ldiring")
+      notify(t('checkout.fillAll'))
       return false
     }
 
     if (cartProducts.length === 0) {
-      notify("Savatingiz bo'sh")
+      notify(t('checkout.cartEmpty'))
       return false
     }
 
@@ -362,7 +368,7 @@ export function useShopStore() {
       // Buyurtma yaratilmadi — savat SAQLANIB qoladi (F-05)
       console.error('[Buyurtma] yuborilmadi:', error)
       hapticError()
-      notify(error instanceof ApiError ? error.message : "Buyurtma yuborilmadi, qayta urinib ko'ring")
+      notify(error instanceof ApiError ? error.message : t('checkout.failed'))
       return false
     } finally {
       setSubmitting(false)
@@ -373,11 +379,11 @@ export function useShopStore() {
     setOrderForm({ name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd' })
     setCheckoutDone(true)
     hapticSuccess()
-    notify('Buyurtma muvaffaqiyatli berildi! ✓')
+    notify(t('checkout.success'))
     setTimeout(() => setCheckoutDone(false), 4000)
 
     return true
-  }, [isSubmitting, orderForm, cartProducts, notify])
+  }, [isSubmitting, orderForm, cartProducts, notify, t])
 
   return {
     page, history, canGoBack: history.length > 0 || isCartOpen || isSearchOpen,

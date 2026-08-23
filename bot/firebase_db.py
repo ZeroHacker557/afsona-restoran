@@ -646,3 +646,57 @@ def get_sales_report(days: int = 7) -> dict:
     )[:5]
 
     return report
+
+
+# ─── Analitika ────────────────────────────────────────────────
+
+def get_analytics(days: int = 7) -> dict:
+    """
+    Mini appdagi xatti-harakatlar (12-band).
+
+    Ma'lumot /api/track orqali yig'iladi: har bir hodisa uchun alohida
+    hujjat emas, hisoblagichlar oshiriladi.
+    """
+    from datetime import timedelta
+
+    result = {
+        "days": days,
+        "view": 0,
+        "cart_add": 0,
+        "checkout_start": 0,
+        "top_viewed": [],
+        "conversion": 0.0,
+    }
+
+    try:
+        today = datetime.now(timezone.utc).date()
+        wanted = {(today - timedelta(days=i)).isoformat() for i in range(days)}
+
+        for doc in db.collection("analytics").document("daily").collection("days").get():
+            if doc.id not in wanted:
+                continue
+            d = doc.to_dict() or {}
+            for key in ("view", "cart_add", "checkout_start"):
+                result[key] += int(d.get(key) or 0)
+
+        # Eng ko'p ko'rilgan mahsulotlar
+        items = []
+        for doc in db.collection("analytics").document("products").collection("items").get():
+            d = doc.to_dict() or {}
+            views = int(d.get("view") or 0)
+            if views:
+                product = get_product_by_id(doc.id)
+                items.append({
+                    "name": (product or {}).get("name") or f"ID {doc.id}",
+                    "views": views,
+                    "cart_add": int(d.get("cart_add") or 0),
+                })
+        result["top_viewed"] = sorted(items, key=lambda x: x["views"], reverse=True)[:5]
+
+        if result["view"]:
+            result["conversion"] = round(result["cart_add"] / result["view"] * 100, 1)
+
+    except Exception as e:
+        print(f"[ERR] get_analytics: {e}")
+
+    return result

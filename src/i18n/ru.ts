@@ -55,6 +55,17 @@ export const ru: Record<TranslationKey, string> = {
   'catalog.filterSummary': 'Категория: {category} • Цена: {sort}',
   'catalog.sortAsc': 'по возрастанию',
   'catalog.sortDesc': 'по убыванию',
+  'catalog.priceRange': 'Диапазон цен',
+  'catalog.priceFrom': 'от',
+  'catalog.priceTo': 'до',
+  'catalog.size': 'Размер',
+  'catalog.color': 'Цвет',
+  'catalog.inStockOnly': 'Только в наличии',
+  'catalog.reset': 'Сбросить',
+  'catalog.apply': 'Применить',
+  'catalog.activeFilters': 'фильтров: {count}',
+  'catalog.loadMore': 'Показать ещё',
+  'catalog.showing': '{shown} / {total}',
 
   // ── Товар ──
   'product.title': 'Товар',

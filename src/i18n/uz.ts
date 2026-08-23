@@ -56,6 +56,17 @@ export const uz = {
   'catalog.filterSummary': 'Kategoriya: {category} • Narx: {sort}',
   'catalog.sortAsc': 'arzondan qimmatga',
   'catalog.sortDesc': 'qimmatdan arzonga',
+  'catalog.priceRange': 'Narx oralig‘i',
+  'catalog.priceFrom': 'dan',
+  'catalog.priceTo': 'gacha',
+  'catalog.size': "O'lcham",
+  'catalog.color': 'Rang',
+  'catalog.inStockOnly': 'Faqat sotuvdagilar',
+  'catalog.reset': 'Tozalash',
+  'catalog.apply': "Qo'llash",
+  'catalog.activeFilters': '{count} ta filtr',
+  'catalog.loadMore': 'Ko‘proq ko‘rsatish',
+  'catalog.showing': '{shown} / {total}',
 
   // ── Mahsulot ──
   'product.title': 'Mahsulot',

@@ -425,11 +425,20 @@ async def cb_order_status(callback: CallbackQuery):
     else:
         new = old + f"\n⏰ <b>Status:</b> {emoji} {status}"
 
+    # Xabar rasmli bo'lishi mumkin (chek tasdiqlangandan keyin status
+    # tugmalari o'sha rasmga qo'shiladi) — u holda izohni tahrirlaymiz.
     try:
-        await callback.message.edit_text(new, reply_markup=callback.message.reply_markup,
-                                         disable_web_page_preview=True)
-    except Exception:
-        pass
+        if callback.message.photo:
+            await callback.message.edit_caption(
+                caption=new, reply_markup=callback.message.reply_markup
+            )
+        else:
+            await callback.message.edit_text(
+                new, reply_markup=callback.message.reply_markup,
+                disable_web_page_preview=True,
+            )
+    except Exception as e:
+        logger.warning(f"[STATUS] Admin xabarini yangilab bo'lmadi: {e}")
     await callback.answer(f"✅ {status}")
 
 
