@@ -17,10 +17,12 @@ type Props = {
   onToggleLike: (id: number) => void
   onOpenCart: () => void
   cartCount: number
+  /** Savat yoki qidiruv ochiq bo'lsa pastki panel ularni to'sib qo'ymasligi kerak. */
+  hideBottomBar?: boolean
 }
 
 export function ProductDetailPage({
-  product, onAddToCart, onBack, likedIds, onToggleLike, onOpenCart, cartCount,
+  product, onAddToCart, onBack, likedIds, onToggleLike, onOpenCart, cartCount, hideBottomBar = false,
 }: Props) {
   const t = useT()
   const [activeImage, setActiveImage] = useState(0)
@@ -316,8 +318,8 @@ export function ProductDetailPage({
         </section>
       </section>
 
-      {/* Pastki panel */}
-      {createPortal(
+      {/* Pastki panel — modal ochiq bo'lsa chizilmaydi */}
+      {!hideBottomBar && createPortal(
         <div
           className="fixed bottom-0 left-0 right-0 z-[100] border-t p-4"
           style={{

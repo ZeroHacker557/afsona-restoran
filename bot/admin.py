@@ -565,7 +565,11 @@ async def process_color(message: Message, state: FSMContext):
 
 
 ASK_STOCK = "9\ufe0f\u20e3 Omborda nechta bor? (faqat raqam)\nMasalan: <code>25</code>"
-ASK_IMAGE = "\U0001f51f Mahsulot rasmini yuboring (foto sifatida).\nBu asosiy rasm bo'ladi:"
+ASK_IMAGE = (
+    "\U0001f51f Mahsulot rasmini yuboring \u2014 bu asosiy rasm bo'ladi.\n\n"
+    "<i>Rasm sifatida ham, fayl sifatida ham yuborsangiz bo'ladi. "
+    "Fayl sifatida yuborsangiz Telegram uni siqmaydi va sifat yaxshiroq saqlanadi.</i>"
+)
 
 
 @router.callback_query(F.data == "skip_discount")
@@ -607,18 +611,65 @@ async def process_stock(message: Message, state: FSMContext):
     await message.answer(ASK_IMAGE, parse_mode="HTML")
 
 
-@router.message(AddProduct.image, F.photo)
-async def process_image(message: Message, state: FSMContext, bot: Bot):
+# Rasm fayl sifatida ham yuborilishi mumkin — u holda Telegram uni
+# siqmaydi va sifat saqlanadi. Shuning uchun ikkalasini ham qabul qilamiz.
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _looks_like_image(message: Message) -> bool:
+    """Xabarda rasm bormi — foto yoki rasm fayli."""
+    if message.photo:
+        return True
+    doc = message.document
+    if not doc:
+        return False
+    if (doc.mime_type or "").startswith("image/"):
+        return True
+    name = (doc.file_name or "").lower()
+    return any(name.endswith(ext) for ext in IMAGE_EXTENSIONS)
+
+
+async def _download_image(message: Message, bot: Bot) -> str | None:
+    """
+    Rasmni yuklab, saqlangan fayl nomini qaytaradi.
+    Foto ham, rasm fayli (document) ham qo'llab-quvvatlanadi.
+    """
+    ext = "jpg"
+
+    if message.photo:
+        file_id = message.photo[-1].file_id       # eng yuqori sifat
+    elif message.document:
+        file_id = message.document.file_id
+        name = (message.document.file_name or "").lower()
+        for candidate in IMAGE_EXTENSIONS:
+            if name.endswith(candidate):
+                ext = candidate.lstrip(".")
+                break
+    else:
+        return None
+
+    try:
+        file = await bot.get_file(file_id)
+        filename = f"{uuid.uuid4().hex}.{ext}"
+        filepath = os.path.join(IMAGES_DIR, filename)
+        await bot.download_file(file.file_path, filepath)
+        return filename
+    except Exception as e:
+        print(f"[ERR] Rasmni yuklab bo'lmadi: {e}")
+        return None
+
+
+async def _accept_image(message: Message, state: FSMContext, bot: Bot):
     if not is_admin(message.from_user.id):
         return
 
-    # Download image
-    photo = message.photo[-1]  # Highest resolution
-    file = await bot.get_file(photo.file_id)
-    ext = "jpg"
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    filepath = os.path.join(IMAGES_DIR, filename)
-    await bot.download_file(file.file_path, filepath)
+    filename = await _download_image(message, bot)
+    if not filename:
+        await message.answer(
+            "Rasmni yuklab bo'lmadi. Fayl juda katta bo'lmasin (20 MB gacha) "
+            "va qaytadan yuboring."
+        )
+        return
 
     data = await state.get_data()
     images = data.get("images", [])
@@ -627,35 +678,68 @@ async def process_image(message: Message, state: FSMContext, bot: Bot):
 
     await state.set_state(AddProduct.more_images)
     await message.answer(
-        f"✅ Rasm saqlandi! ({len(images)} ta rasm)\n\n"
-        f"Yana rasm qo'shmoqchimisiz?",
+        f"\u2705 Rasm saqlandi! ({len(images)} ta rasm)\n\nYana rasm qo'shmoqchimisiz?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📷 Yana rasm qo'shish", callback_data="addprod_more_img")],
-            [InlineKeyboardButton(text="✅ Tayyor — saqlash", callback_data="addprod_save")],
+            [InlineKeyboardButton(text="\U0001f4f7 Yana rasm qo'shish", callback_data="addprod_more_img")],
+            [InlineKeyboardButton(text="\u2705 Tayyor \u2014 saqlash", callback_data="addprod_save")],
         ]),
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
+
+
+@router.message(AddProduct.image, F.photo)
+async def process_image_photo(message: Message, state: FSMContext, bot: Bot):
+    await _accept_image(message, state, bot)
+
+
+@router.message(AddProduct.image, F.document)
+async def process_image_document(message: Message, state: FSMContext, bot: Bot):
+    if not is_admin(message.from_user.id):
+        return
+    if not _looks_like_image(message):
+        await message.answer(
+            "Bu rasm fayli emas. JPG, PNG yoki WEBP yuboring."
+        )
+        return
+    await _accept_image(message, state, bot)
 
 
 @router.message(AddProduct.image)
 async def process_image_invalid(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
-    await message.answer("❌ Iltimos, rasm yuboring (foto sifatida)!")
+    await message.answer(
+        "Iltimos, mahsulot rasmini yuboring.\n"
+        "Rasm sifatida ham, fayl sifatida ham yuborsangiz bo'ladi "
+        "(fayl sifatida yuborsangiz sifat yaxshiroq saqlanadi)."
+    )
 
 
 @router.callback_query(F.data == "addprod_more_img")
 async def cb_more_images(callback: CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
         return
     await state.set_state(AddProduct.image)
-    await callback.message.edit_text("📷 Keyingi rasmni yuboring:")
+    await callback.message.edit_text(
+        "\U0001f4f7 Keyingi rasmni yuboring (rasm yoki fayl sifatida):"
+    )
+    await callback.answer()
 
 
 @router.message(AddProduct.more_images, F.photo)
-async def process_more_image(message: Message, state: FSMContext, bot: Bot):
-    # Same as process_image
-    await process_image(message, state, bot)
+async def process_more_image_photo(message: Message, state: FSMContext, bot: Bot):
+    await _accept_image(message, state, bot)
+
+
+@router.message(AddProduct.more_images, F.document)
+async def process_more_image_document(message: Message, state: FSMContext, bot: Bot):
+    if not is_admin(message.from_user.id):
+        return
+    if not _looks_like_image(message):
+        await message.answer("Bu rasm fayli emas. JPG, PNG yoki WEBP yuboring.")
+        return
+    await _accept_image(message, state, bot)
 
 
 @router.callback_query(F.data == "addprod_save")

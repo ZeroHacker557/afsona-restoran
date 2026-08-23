@@ -178,6 +178,7 @@ function App() {
               onToggleLike={shop.toggleLike}
               onOpenCart={shop.openCart}
               cartCount={shop.cartCount}
+              hideBottomBar={shop.isCartOpen || shop.isSearchOpen}
             />
           )}
 
