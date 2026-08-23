@@ -13,12 +13,14 @@ const tabs = ['Barchasi', 'Yangi', 'Qabul qilindi', 'Bekor qilingan']
 
 type Props = {
   orders: Order[]
+  authReady: boolean
+  isAuthenticated: boolean
   cartCount: number
   onSearch: () => void
   onOpenCart: () => void
 }
 
-export function OrdersPage({ orders, cartCount, onSearch, onOpenCart }: Props) {
+export function OrdersPage({ orders, authReady, isAuthenticated, cartCount, onSearch, onOpenCart }: Props) {
   const [active, setActive] = useState('Barchasi')
   const [newest, setNewest] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -181,7 +183,27 @@ export function OrdersPage({ orders, cartCount, onSearch, onOpenCart }: Props) {
           )
         })}
 
-        {!shown.length && (
+        {!authReady && (
+          <div className="flex flex-col items-center py-20 text-center">
+            <div className="size-8 animate-spin rounded-full border-4" style={{ borderColor: '#ede9fe', borderTopColor: '#7c3aed' }} />
+            <p className="mt-4 text-sm" style={{ color: '#94a3b8' }}>Buyurtmalar yuklanmoqda...</p>
+          </div>
+        )}
+
+        {authReady && !isAuthenticated && (
+          <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.5s ease' }}>
+            <span className="grid size-20 place-items-center rounded-full" style={{ background: '#fef3c7', color: '#d97706' }}>
+              <ShoppingBag size={36} />
+            </span>
+            <p className="mt-5 text-lg font-bold" style={{ color: '#334155' }}>Buyurtmalarni ko'rsatib bo'lmadi</p>
+            <p className="mt-2 max-w-[260px] text-sm" style={{ color: '#94a3b8' }}>
+              Hisobingizga ulanib bo'lmadi. Buyurtmalaringiz saqlanib turibdi &mdash;
+              ilovani yopib, Telegram orqali qaytadan oching.
+            </p>
+          </div>
+        )}
+
+        {authReady && isAuthenticated && !shown.length && (
           <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.5s ease' }}>
             <span className="grid size-20 place-items-center rounded-full" style={{ background: '#f5f0ff', color: '#a78bfa' }}>
               <ShoppingBag size={36} />

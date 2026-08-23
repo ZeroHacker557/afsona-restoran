@@ -3,12 +3,22 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import App from './App'
 import { TelegramGate } from './components/ui/TelegramGate'
-import { isTelegram } from './utils/telegram'
+import { isTelegramEnvironment, waitForTelegram } from './utils/telegram'
 
-// Production'da ilova faqat Telegram ichida ishlaydi. Tashqarida ochilsa
-// Firestore'ga umuman ulanmaymiz (F-06). Dev rejimida brauzerda ishlash qoladi.
-const insideTelegram = isTelegram() || import.meta.env.DEV
+const root = createRoot(document.getElementById('root')!)
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>{insideTelegram ? <App /> : <TelegramGate />}</StrictMode>,
-)
+function render(insideTelegram: boolean) {
+  root.render(
+    <StrictMode>{insideTelegram ? <App /> : <TelegramGate />}</StrictMode>,
+  )
+}
+
+// Telegram ichida bo'lsak — darhol ochamiz, kutmaymiz.
+if (isTelegramEnvironment() || import.meta.env.DEV) {
+  render(true)
+} else {
+  // SDK skripti hali yuklanmagan bo'lishi mumkin. Xulosani shoshilib
+  // chiqarmaymiz: qisqa kutib, keyin qaytadan tekshiramiz. Aks holda
+  // sekin internetda haqiqiy Telegram foydalanuvchisi ham to'siqqa uchraydi.
+  waitForTelegram().then(() => render(isTelegramEnvironment()))
+}

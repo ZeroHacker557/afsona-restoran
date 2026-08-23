@@ -45,6 +45,7 @@ export function useShopStore() {
   const [checkoutDone, setCheckoutDone] = useState(false)
   const [isSubmitting, setSubmitting] = useState(false)
   const [authReady, setAuthReady] = useState(false)
+  const [isAuthenticated, setAuthenticated] = useState(false)
   const [orderForm, setOrderForm] = useState<OrderForm>({
     name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd',
   })
@@ -99,6 +100,7 @@ export function useShopStore() {
 
       if (!user) {
         setAuthReady(true)
+        setAuthenticated(false)
         setUserProfile(null)
         setMyOrders([])
         setNotifications([])
@@ -108,6 +110,7 @@ export function useShopStore() {
 
       const userId = Number(user.uid)
       setAuthReady(true)
+      setAuthenticated(true)
 
       unsubOrders = subscribeToUserOrders(userId, setMyOrders)
       unsubProfile = subscribeToUserProfile(userId, (profile) => {
@@ -293,7 +296,7 @@ export function useShopStore() {
     cartItems, cartCount, cartTotal, cartProducts,
     likedIds, selectedProduct,
     isSearchOpen, isCartOpen, query, searchResults, toast,
-    myOrders, checkoutDone, isSubmitting, authReady, orderForm, userProfile,
+    myOrders, checkoutDone, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
     notifications, unreadNotificationsCount,
     navigate, openProduct, toggleLike,
     setSearchOpen, setQuery,

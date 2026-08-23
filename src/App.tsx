@@ -101,6 +101,8 @@ function App() {
             <div className="page-animate">
               <OrdersPage
                 orders={shop.myOrders}
+                authReady={shop.authReady}
+                isAuthenticated={shop.isAuthenticated}
                 cartCount={shop.cartCount}
                 onSearch={() => shop.setSearchOpen(true)}
                 onOpenCart={shop.openCart}

@@ -73,6 +73,40 @@ export function isTelegram(): boolean {
   return !!window.Telegram?.WebApp?.initData
 }
 
+/**
+ * Telegram ichida ochilganmi — KENG tekshiruv.
+ *
+ * `initData` ba'zi mijozlarda (eski Desktop versiyalari, ayrim
+ * Android build'lar) bo'sh kelishi mumkin, shuning uchun unga
+ * yolg'iz tayanib bo'lmaydi. Uchta belgidan bittasi ham yetarli.
+ * Shubha bo'lsa — ilovani ko'rsatamiz, to'sib qo'ymaymiz.
+ */
+export function isTelegramEnvironment(): boolean {
+  const tg = getTelegram()
+  if (!tg) return false
+  if (tg.initData) return true
+  if (tg.initDataUnsafe?.user) return true
+  return Boolean(tg.platform && tg.platform !== 'unknown')
+}
+
+/**
+ * telegram-web-app.js sekin yuklansa (yoki CDN javob bermasa),
+ * darhol xulosa chiqarmaymiz — qisqa vaqt kutamiz.
+ */
+export function waitForTelegram(timeoutMs = 1500): Promise<void> {
+  if (window.Telegram?.WebApp) return Promise.resolve()
+
+  return new Promise((resolve) => {
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      if (window.Telegram?.WebApp || Date.now() - startedAt >= timeoutMs) {
+        window.clearInterval(timer)
+        resolve()
+      }
+    }, 50)
+  })
+}
+
 // Get Telegram WebApp instance
 export function getTelegram(): TelegramWebApp | null {
   return window.Telegram?.WebApp ?? null
