@@ -112,7 +112,7 @@ export function HomePage({
               </button>
             </div>
             <img
-              className="pointer-events-none absolute bottom-0 right-0 h-[78%] w-[42%] object-contain object-bottom sm:h-[88%] sm:w-[46%]"
+              className="pointer-events-none absolute top-1/2 right-0 h-[85%] w-[42%] -translate-y-1/2 object-contain object-center sm:h-[92%] sm:w-[46%]"
               src={heroImg}
               alt=""
               aria-hidden="true"
