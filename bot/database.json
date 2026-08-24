@@ -3,30 +3,24 @@
     {
       "id": 1,
       "name": "Hammasi",
-      "icon": "Package"
+      "icon": "package"
     }
   ],
   "products": [
     {
       "id": 1,
-      "name": "Italian Shirt",
-      "price": 500000,
+      "name": "Osh (Palov)",
+      "price": 35000,
       "oldPrice": null,
       "category": "Hammasi",
-      "color": "Qora, Oq, Qizil",
       "rating": 5.0,
       "reviews": 0,
       "images": [
         "e7070772c76f4aabbafa1294976c6dda.jpg"
       ],
-      "description": "",
-      "discount": "-20%",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL"
-      ]
+      "description": "An'anaviy o'zbek palovi: guruch, mol go'shti, sabzi va ziravorlar bilan.",
+      "discount": "",
+      "stock": 25
     }
   ],
   "next_cat_id": 2,

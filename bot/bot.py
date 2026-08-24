@@ -53,8 +53,8 @@ STATUS_EMOJI = {
 def main_kb(admin: bool = False):
     rows = [
         # Oddiy tugma — bosilganda pastdagi menyu tugmasiga yo'naltiradi.
-        # Mini app faqat yozuv maydoni yonidagi "🛍 Katalog" orqali ochiladi.
-        [KeyboardButton(text="🛍 Katalogni ochish")],
+        # Mini app faqat yozuv maydoni yonidagi "🍽 Menyu" orqali ochiladi.
+        [KeyboardButton(text="🍽 Menyu")],
         [KeyboardButton(text="📦 Buyurtmalarim")],
         [KeyboardButton(text="📞 Biz bilan aloqa"), KeyboardButton(text="ℹ️ Yordam")]
     ]
@@ -179,10 +179,10 @@ def current_caption(msg) -> str:
 
 def build_receipt_caption(order: dict | None, display_id: str) -> str:
     """
-    Adminga yuboriladigan chek izohi: mijoz ma'lumotlari, mahsulotlar
+    Adminga yuboriladigan chek izohi: mijoz ma'lumotlari, taomlar
     (rang va o'lcham bilan) hamda to'liq hisob-kitob.
 
-    Telegram izohni 1024 belgi bilan cheklaydi — sig'masa mahsulotlar
+    Telegram izohni 1024 belgi bilan cheklaydi — sig'masa taomlar
     ro'yxati qisqartiriladi, mijoz ma'lumotlari esa doim to'liq qoladi.
     """
     head = "💳 <b>TO'LOV CHEKI</b>\n" + "━" * 22 + "\n\n"
@@ -206,7 +206,7 @@ def build_receipt_caption(order: dict | None, display_id: str) -> str:
     discount = order.get("discount") or 0
     delivery_fee = order.get("deliveryFee") or 0
     if isinstance(subtotal, (int, float)) and (discount or delivery_fee):
-        tail += f"🧾 Mahsulotlar: {db.format_price(subtotal)}\n"
+        tail += f"🧾 Taomlar: {db.format_price(subtotal)}\n"
         if discount:
             promo = order.get("promoCode")
             promo_text = f" ({promo})" if promo else ""
@@ -220,7 +220,7 @@ def build_receipt_caption(order: dict | None, display_id: str) -> str:
     total_str = db.format_price(total) if isinstance(total, (int, float)) else str(total)
     tail += f"💰 <b>To'langan summa: {total_str}</b>"
 
-    # ── Mahsulotlar ──
+    # ── Taomlar ──
     products = order.get("products", [])
     lines = []
     for i, item in enumerate(products, 1):
@@ -241,17 +241,17 @@ def build_receipt_caption(order: dict | None, display_id: str) -> str:
             f"     └ {qty} ta × {db.format_price(price)} = <b>{db.format_price(price * qty)}</b>\n"
         )
 
-    body_header = "\n📦 <b>Mahsulotlar:</b>\n"
+    body_header = "\n📦 <b>Taomlar:</b>\n"
     shown = list(lines)
     while shown:
         hidden = len(lines) - len(shown)
-        more = f"  <i>...va yana {hidden} ta mahsulot</i>\n" if hidden else ""
+        more = f"  <i>...va yana {hidden} ta taom</i>\n" if hidden else ""
         caption = head + body_header + "".join(shown) + more + tail
         if len(caption) <= CAPTION_LIMIT:
             return caption
         shown.pop()
 
-    return head + body_header + f"  <i>{len(lines)} ta mahsulot</i>\n" + tail
+    return head + body_header + f"  <i>{len(lines)} ta taom</i>\n" + tail
 
 
 # ─── Yangi buyurtma: Admin + User bildirishnomasi ─────────────
@@ -289,14 +289,14 @@ async def notify_admin_order(order_data: dict):
             text += f"💬 <b>Izoh:</b> {customer['comment']}\n"
 
         text += f"\n💳 <b>To'lov:</b> {pay_label}\n"
-        text += f"\n📦 <b>Mahsulotlar:</b>\n{get_products_text(products)}"
+        text += f"\n📦 <b>Taomlar:</b>\n{get_products_text(products)}"
         text += "━" * 22 + "\n"
 
         subtotal = order_data.get("subtotal")
         discount = order_data.get("discount") or 0
         delivery_fee = order_data.get("deliveryFee") or 0
         if isinstance(subtotal, (int, float)) and (discount or delivery_fee):
-            text += f"🧾 Mahsulotlar: {db.format_price(subtotal)}\n"
+            text += f"🧾 Taomlar: {db.format_price(subtotal)}\n"
             if discount:
                 promo = order_data.get("promoCode")
                 promo_text = f" ({promo})" if promo else ""
@@ -328,7 +328,7 @@ async def notify_admin_order(order_data: dict):
             u_text  = "🎉 <b>Buyurtmangiz qabul qilindi!</b>\n"
             u_text += "━" * 22 + "\n\n"
             u_text += f"🆔 Buyurtma: <b>{order_id}</b>\n"
-            u_text += "📦 <b>Mahsulotlar:</b>\n"
+            u_text += "📦 <b>Taomlar:</b>\n"
             for p in products:
                 qty  = p.get("quantity", 1)
                 prod = p.get("product") or p
@@ -375,7 +375,7 @@ async def notify_admin_cancel(order_data: dict):
         text += f"\U0001f464 Mijoz: {cust_name}\n"
         text += f"\U0001f4de Tel: <code>{cust_phone}</code>\n"
         text += f"\U0001f4b0 Summa: <b>{total_str}</b>\n\n"
-        text += "\U0001f4e6 <b>Mahsulotlar:</b>\n"
+        text += "\U0001f4e6 <b>Taomlar:</b>\n"
         for item in order_data.get("products", []):
             prod = item.get("product") or item
             text += f"  \u2022 {prod.get('name', '?')} \u00d7 {item.get('quantity', 1)}\n"
@@ -621,7 +621,7 @@ async def handle_my_orders(message: Message):
     if not orders:
         await message.answer(
             "📦 <b>Sizda hozircha buyurtmalar mavjud emas.</b>\n\n"
-            "Katalogimiz bilan tanishib, o'zingizga yoqqan mahsulotlarni xarid qilishingiz mumkin! 🛍"
+            "Menyumiz bilan tanishib, o'zingizga yoqqan taomlarni buyurtma qilishingiz mumkin! 🍽"
         )
         return
 
@@ -663,7 +663,7 @@ async def handle_my_orders(message: Message):
         else:
             text += "💳 <b>To'lov turi:</b> 💵 Naqd (yetkazganda)\n"
 
-        text += "\n🛍 <b>Mahsulotlar:</b>\n"
+        text += "\n🛍 <b>Taomlar:</b>\n"
         
         products = o.get("products", [])
         for idx, p in enumerate(products, 1):
@@ -715,7 +715,7 @@ async def cmd_start(message: Message, state: FSMContext):
             u_text  = "💳 <b>To'lov ma'lumotlari</b>\n"
             u_text += "━" * 22 + "\n\n"
             u_text += f"🆔 Buyurtma ID: <b>{display_id}</b>\n"
-            u_text += "📦 <b>Mahsulotlar:</b>\n"
+            u_text += "📦 <b>Taomlar:</b>\n"
             for p in products:
                 qty   = p.get("quantity", 1)
                 size  = p.get("size")
@@ -748,9 +748,9 @@ async def cmd_start(message: Message, state: FSMContext):
     # ── Oddiy /start ──
     text = (
         f"Assalomu alaykum, <b>{user.first_name}</b>! 👋\n\n"
-        "✨ <b>Online do'konimizga xush kelibsiz!</b>\n\n"
-        "🛍 <b>Katalog orqali o'zingizga yoqqan mahsulotlarni tanlang va oson buyurtma bering.</b>\n\n"
-        "👇 <i>Xaridni boshlash uchun quyidagi tugmani bosing:</i>"
+        "✨ <b>Abubakr Food restoraniga xush kelibsiz!</b>\n\n"
+        "🍽 <b>Menyudan o'zingizga yoqqan taomlarni tanlang va oson buyurtma bering.</b>\n\n"
+        "👇 <i>Buyurtmani boshlash uchun quyidagi tugmani bosing:</i>"
     )
     await message.answer(text, reply_markup=main_kb(admin))
 
@@ -805,21 +805,21 @@ async def handle_admin_btn(message: Message, state: FSMContext):
     await cmd_admin(message, state)
 
 
-@dp.message(F.text == "🛍 Katalogni ochish")
+@dp.message(F.text == "🍽 Menyu")
 async def handle_open_catalog(message: Message):
     """
-    Katalog tugmasi bosilganda mini appni qayerdan ochishni ko'rsatadi.
-    Tugmaning o'ziga web_app biriktirilmagan — do'kon yozuv maydoni
-    yonidagi doimiy menyu tugmasi orqali ochiladi.
+    Menyu tugmasi bosilganda mini appni qayerdan ochishni ko'rsatadi.
+    Tugmaning o'ziga web_app biriktirilmagan — restoran menyusi yozuv
+    maydoni yonidagi doimiy menyu tugmasi orqali ochiladi.
     """
-    text = "🛍 <b>KATALOG</b>\n"
+    text = "🍽 <b>MENYU</b>\n"
     text += "━" * 22 + "\n\n"
-    text += "Do'konimiz Telegram ilovasi ichida ochiladi.\n\n"
+    text += "Restoranimiz menyusi Telegram ilovasi ichida ochiladi.\n\n"
     text += "👇 Pastda, <b>yozuv maydonining chap tomonida</b>\n"
-    text += "   <b>«🛍 Katalog»</b> tugmasi turibdi.\n\n"
-    text += "Shu tugmani bosing — do'kon shu yerning o'zida ochiladi.\n\n"
+    text += "   <b>«🍽 Menyu»</b> tugmasi turibdi.\n\n"
+    text += "Shu tugmani bosing — menyu shu yerning o'zida ochiladi.\n\n"
     text += "━" * 22 + "\n"
-    text += "✨ <i>Mahsulotlarni ko'ring, savatga qo'shing va\n"
+    text += "✨ <i>Taomlarni ko'ring, savatga qo'shing va\n"
     text += "bir necha bosishda buyurtma bering.</i>"
 
     await message.answer(text)
@@ -828,12 +828,12 @@ async def handle_open_catalog(message: Message):
 @dp.message(F.text == "📞 Biz bilan aloqa")
 async def cmd_contact(message: Message):
     await message.answer(
-        "📞 <b>Biz bilan bog'lanish:</b>\n\n"
+        "📞 <b>Abubakr Food — biz bilan bog'lanish:</b>\n\n"
         "👨‍💻 <b>Mijozlarni qo'llab-quvvatlash:</b> @admin\n"
         "📞 <b>Telefon raqam:</b> +998 90 123 45 67\n"
         "📍 <b>Manzil:</b> Toshkent shahri\n"
         "⏰ <b>Ish vaqti:</b> 09:00 dan 20:00 gacha\n\n"
-        "<i>Savollaringiz bo'lsa, bemalol murojaat qiling! Biz har doim yordam berishga tayyormiz.</i>"
+        "<i>Buyurtma yoki savollaringiz bo'lsa, bemalol murojaat qiling! Biz har doim yordam berishga tayyormiz.</i>"
     )
 
 
@@ -841,9 +841,9 @@ async def cmd_contact(message: Message):
 async def cmd_help(message: Message):
     await message.answer(
         "ℹ️ <b>Botdan qanday foydalanish mumkin?</b>\n\n"
-        "1️⃣ Yozuv maydoni yonidagi <b>«🛍 Katalog»</b> tugmasini bosib, "
-        "mahsulotlar bilan tanishing.\n"
-        "2️⃣ O'zingizga yoqqan mahsulotlarni <b>Savatga</b> qo'shing.\n"
+        "1️⃣ Yozuv maydoni yonidagi <b>«🍽 Menyu»</b> tugmasini bosib, "
+        "taomlar bilan tanishing.\n"
+        "2️⃣ O'zingizga yoqqan taomlarni <b>Savatga</b> qo'shing.\n"
         "3️⃣ Buyurtmani rasmiylashtirishda <b>Naqd</b> yoki <b>Karta</b> orqali to'lov usulini tanlang.\n"
         "4️⃣ Agar karta orqali to'lov qilsangiz, to'lov chekini botga yuboring.\n"
         "5️⃣ Buyurtmangiz holatini <b>Buyurtmalarim</b> bo'limidan kuzatib boring.\n\n"
@@ -881,7 +881,7 @@ async def main():
 
     try:
         await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(text="🛍 Katalog", web_app=WebAppInfo(url=MINI_APP_URL))
+            menu_button=MenuButtonWebApp(text="🍽 Menyu", web_app=WebAppInfo(url=MINI_APP_URL))
         )
     except Exception as e:
         logger.warning(f"Menu button: {e}")

@@ -11,7 +11,7 @@ from firebase_admin import credentials, firestore, storage
 
 from config import CARD_NUMBER, CARD_OWNER
 
-KEY_FILENAME = "ecommercytest-firebase-adminsdk-fbsvc-645304f3a0.json"
+KEY_FILENAME = "ecommercy-restoran-firebase-adminsdk-fbsvc-1bd706bd7b.json"
 
 # Search for service account key file in root or bot dir
 key_path = KEY_FILENAME
@@ -21,7 +21,7 @@ if not os.path.exists(key_path):
 if not firebase_admin._apps:
     cred = credentials.Certificate(key_path)
     firebase_admin.initialize_app(cred, {
-        'storageBucket': 'ecommercytest.firebasestorage.app'
+        'storageBucket': 'ecommercy-restoran.firebasestorage.app'
     })
 
 db = firestore.client()
@@ -116,18 +116,18 @@ def add_product(data: dict):
     }
 
     db.collection("products").document(product_id).set(product_data)
-    print(f"[OK] Firebase: Mahsulot saqlandi ({product_data['name']})")
+    print(f"[OK] Firebase: Taom saqlandi ({product_data['name']})")
     return product_data
 
 
 def update_product(prod_id: str | int, updates: dict) -> bool:
-    """Mahsulotning ayrim maydonlarini yangilaydi (narx, nom, qoldiq...)."""
+    """Taomning ayrim maydonlarini yangilaydi (narx, nom, qoldiq...)."""
     try:
         ref = db.collection("products").document(str(prod_id))
         if not ref.get().exists:
             return False
         ref.update(updates)
-        print(f"[OK] Firebase: Mahsulot yangilandi ({prod_id}): {list(updates)}")
+        print(f"[OK] Firebase: Taom yangilandi ({prod_id}): {list(updates)}")
         return True
     except Exception as e:
         print(f"[ERR] update_product: {e}")
@@ -136,7 +136,7 @@ def update_product(prod_id: str | int, updates: dict) -> bool:
 
 def delete_product(prod_id: str | int):
     db.collection("products").document(str(prod_id)).delete()
-    print(f"[DEL] Firebase: Mahsulot o'chirildi ({prod_id})")
+    print(f"[DEL] Firebase: Taom o'chirildi ({prod_id})")
 
 
 # ─── Categories ───────────────────────────────────────────────
@@ -623,7 +623,7 @@ def get_sales_report(days: int = 7) -> dict:
         if d.get("userId"):
             customers.add(d["userId"])
 
-        # Eng ko'p sotilgan mahsulotlar — bekor qilinmaganlar bo'yicha
+        # Eng ko'p sotilgan taomlar — bekor qilinmaganlar bo'yicha
         if status not in ("Bekor qilingan", "Rad etildi"):
             for item in d.get("products", []):
                 prod = item.get("product") or {}
@@ -679,7 +679,7 @@ def get_analytics(days: int = 7) -> dict:
             for key in ("view", "cart_add", "checkout_start"):
                 result[key] += int(d.get(key) or 0)
 
-        # Eng ko'p ko'rilgan mahsulotlar
+        # Eng ko'p ko'rilgan taomlar
         items = []
         for doc in db.collection("analytics").document("products").collection("items").get():
             d = doc.to_dict() or {}
@@ -715,12 +715,12 @@ def rename_category(cat_id: str | int, new_name: str) -> int:
     """
     Kategoriya nomini o'zgartiradi.
 
-    MUHIM: mahsulotlarda kategoriya NOMI saqlanadi, id emas. Shuning uchun
+    MUHIM: taomlarda kategoriya NOMI saqlanadi, id emas. Shuning uchun
     faqat kategoriya hujjatini yangilash yetmaydi — o'sha nomdagi barcha
-    mahsulotlarni ham yangilash kerak, aks holda ular bog'lanishini
+    taomlarni ham yangilash kerak, aks holda ular bog'lanishini
     yo'qotadi va katalogda ko'rinmay qoladi.
 
-    Yangilangan mahsulotlar sonini qaytaradi.
+    Yangilangan taomlar sonini qaytaradi.
     """
     new_name = new_name.strip()
     if not new_name:
@@ -751,9 +751,9 @@ def rename_category(cat_id: str | int, new_name: str) -> int:
         if updated % 400 != 0 or updated == 0:
             batch.commit()
     except Exception as e:
-        print(f"[ERR] rename_category (mahsulotlar): {e}")
+        print(f"[ERR] rename_category (taomlar): {e}")
 
-    print(f"[OK] Kategoriya: '{old_name}' -> '{new_name}' ({updated} ta mahsulot)")
+    print(f"[OK] Kategoriya: '{old_name}' -> '{new_name}' ({updated} ta taom)")
     return updated
 
 

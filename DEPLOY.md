@@ -37,7 +37,7 @@ Firebase Console → ⚙️ **Project Settings** → **Service accounts** →
 **Generate new private key**. Yuklab olingan JSON faylni matn muharririda
 oching va **butun mazmunini** (`{` dan `}` gacha) qiymat sifatida joylang.
 
-> Bu kalit loyihadagi `ecommercytest-firebase-adminsdk-*.json` fayl bilan
+> Bu kalit loyihadagi `ecommercy-restoran-firebase-adminsdk-*.json` fayl bilan
 > bir xil. U `.gitignore` da — git'ga tushmaydi va tushmasligi kerak.
 
 Env o'zgaruvchilarni qo'shgandan keyin **qaytadan deploy qiling** —

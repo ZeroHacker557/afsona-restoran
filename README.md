@@ -1,14 +1,17 @@
-# ShopOnline frontend
+# Abubakr Food
 
-Rasmlardagi mobil e-commerce tajribasiga asoslangan React, TypeScript va Tailwind CSS ilovasi.
+React, TypeScript va Tailwind CSS asosidagi restoran uchun Telegram Mini App —
+menyu, savat, buyurtma berish va yetkazib berish tizimi.
 
 ## Tuzilma
 
-- `src/pages` — biznes ekranlar: katalog, profil, buyurtmalar va mahsulot detali.
-- `src/components` — qayta ishlatiluvchi layout, UI, mahsulot va buyurtma komponentlari.
+- `src/pages` — asosiy ekranlar: menyu, profil, buyurtmalar va taom tafsiloti.
+- `src/components` — qayta ishlatiluvchi layout, UI, taom va buyurtma komponentlari.
 - `src/hooks` — ilovaning UI holati va biznes harakatlari.
 - `src/types` — markazlashtirilgan TypeScript domen turlari.
-- `src/data.ts` — keyinchalik REST/GraphQL API bilan almashtiriladigan mock ma’lumotlar.
+- `src/i18n` — o'zbekcha va ruscha tarjimalar.
+- `bot/` — Python (aiogram) Telegram bot: admin panel, menyu boshqaruvi va to'lov tizimi.
+- `api/` — Vercel serverless funksiyalari (buyurtma, sharh, autentifikatsiya).
 
 ## Buyruqlar
 
@@ -19,4 +22,4 @@ npm run build
 npm run lint
 ```
 
-Mahsulot rasmlari demo URL hisoblanadi. Production loyihada ularni CMS/CDN dan keladigan media manzillariga almashtirish kerak.
+Taomlar va kategoriyalar bot orqali (admin panel) qo'shiladi va Firestore'da saqlanadi.

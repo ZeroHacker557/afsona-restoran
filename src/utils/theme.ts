@@ -8,7 +8,7 @@ const STORAGE_KEY = 'shopOnlineTheme'
  * Ilova ko'rinishi.
  *
  * Standart — YORUG'. Tizim yoki Telegram temasiga avtomatik ergashmaymiz:
- * do'kon egasi ilova doim bir xil ko'rinishini xohlaydi, foydalanuvchi esa
+ * restoran egasi ilova doim bir xil ko'rinishini xohlaydi, foydalanuvchi esa
  * xohlasa Profil bo'limidan qorong'iga o'tkazadi. Tanlov saqlanib qoladi.
  */
 export function getStoredTheme(): ThemeMode {

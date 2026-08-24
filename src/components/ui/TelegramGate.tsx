@@ -1,6 +1,6 @@
-import { ShoppingBag } from 'lucide-react'
+import { UtensilsCrossed } from 'lucide-react'
 
-const BOT_URL = 'https://t.me/ecommercy_test_bot'
+const BOT_URL = 'https://t.me/abubakrfood_bot'
 
 /**
  * Ilova Telegram tashqarisida ochilganda ko'rsatiladi.
@@ -20,20 +20,20 @@ export function TelegramGate() {
           className="mx-auto grid size-16 place-items-center rounded-2xl"
           style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
         >
-          <ShoppingBag size={30} />
+          <UtensilsCrossed size={30} />
         </span>
 
         <h1 className="mt-6 text-2xl font-extrabold" style={{ color: 'var(--ink)' }}>
-          Shop<span style={{ color: 'var(--brand)' }}>Online</span>
+          Abubakr<span style={{ color: 'var(--brand)' }}> Food</span>
         </h1>
 
         <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
-          Do&rsquo;kon Telegram ilovasi ichida ishlaydi. Botni oching va
-          &laquo;Katalogni ochish&raquo; tugmasini bosing.
+          Restoran Telegram ilovasi ichida ishlaydi. Botni oching va
+          &laquo;Menyuni ochish&raquo; tugmasini bosing.
         </p>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--faint)' }}>
-          Магазин работает внутри Telegram. Откройте бота и нажмите
-          &laquo;Открыть каталог&raquo;.
+          Ресторан работает внутри Telegram. Откройте бота и нажмите
+          &laquo;Открыть меню&raquo;.
         </p>
 
         <a href={BOT_URL} className="btn-primary mt-7 w-full py-4">

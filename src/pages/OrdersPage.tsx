@@ -9,7 +9,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { useT, type TranslationKey } from '../i18n'
 import type { Order, OrderStatus } from '../types/domain'
 
-const BOT_USERNAME = 'ecommercy_test_bot'
+const BOT_USERNAME = 'abubakrfood_bot'
 
 const TABS: { id: string; labelKey: TranslationKey }[] = [
   { id: 'all', labelKey: 'orders.tabAll' },

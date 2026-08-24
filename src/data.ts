@@ -1,6 +1,6 @@
 import type { Category, Product } from './types/domain'
 
-// Bo'sh — mahsulotlar bot orqali qo'shiladi
+// Bo'sh — taomlar bot orqali qo'shiladi
 export const products: Product[] = []
 export const categories: Category[] = []
 

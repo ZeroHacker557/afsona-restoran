@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowRight, Bell, CircleHelp, Heart, Package, Search,
-  ShieldCheck, ShoppingBag, Truck,
+  ArrowRight, Bell, CircleHelp, Heart, Leaf, Search,
+  ShieldCheck, Truck, UtensilsCrossed,
 } from 'lucide-react'
 import heroImg from '../images/hero-img.webp'
 import { ProductCard } from '../components/product/ProductCard'
@@ -16,7 +16,7 @@ const benefits: [LucideIcon, TranslationKey, TranslationKey][] = [
   [Truck, 'benefit.delivery', 'benefit.deliverySub'],
   [ShieldCheck, 'benefit.payment', 'benefit.paymentSub'],
   [CircleHelp, 'benefit.support', 'benefit.supportSub'],
-  [Package, 'benefit.return', 'benefit.returnSub'],
+  [Leaf, 'benefit.return', 'benefit.returnSub'],
 ]
 
 type Props = ProductActions & {
@@ -47,10 +47,10 @@ export function HomePage({
             className="grid size-11 place-items-center rounded-xl"
             style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
           >
-            <ShoppingBag />
+            <UtensilsCrossed />
           </span>
           <b className="text-2xl tracking-tight sm:text-3xl" style={{ color: 'var(--ink)' }}>
-            Shop<span style={{ color: 'var(--brand)' }}>Online</span>
+            Abubakr<span style={{ color: 'var(--brand)' }}> Food</span>
           </b>
         </div>
         <div className="flex items-center gap-1">
@@ -201,7 +201,7 @@ export function HomePage({
               className="mx-auto grid size-16 place-items-center rounded-full"
               style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
             >
-              <ShoppingBag size={30} />
+              <UtensilsCrossed size={30} />
             </span>
             <p className="mt-4 font-bold" style={{ color: 'var(--ink-2)' }}>{t('home.emptyTitle')}</p>
             <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>{t('home.emptyText')}</p>

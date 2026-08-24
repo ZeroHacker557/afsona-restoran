@@ -5,13 +5,13 @@ import { parseDate } from '../utils/date'
 import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notification, UserProfile } from '../types/domain'
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB-JENf9xTOJcEF81-6KJxb0HnCyLmjkc0",
-  authDomain: "ecommercytest.firebaseapp.com",
-  projectId: "ecommercytest",
-  storageBucket: "ecommercytest.firebasestorage.app",
-  messagingSenderId: "107932467075",
-  appId: "1:107932467075:web:1d2740db24de18661c00b6",
-  measurementId: "G-TFYZD2LLN0"
+  apiKey: "AIzaSyCzvCSShxNSDPTGhSctnOuwtqpbOlOs3OQ",
+  authDomain: "ecommercy-restoran.firebaseapp.com",
+  projectId: "ecommercy-restoran",
+  storageBucket: "ecommercy-restoran.firebasestorage.app",
+  messagingSenderId: "346006739182",
+  appId: "1:346006739182:web:d1cd0b98f9d024519e7bff",
+  measurementId: "G-RJ6Q8MCELF"
 }
 
 // Initialize Firebase

@@ -14,7 +14,7 @@ for doc in docs:
         if "storage.googleapis.com" in img:
             filename = img.split("products/")[-1]
             encoded = urllib.parse.quote(f"products/{filename}", safe="")
-            new_url = f"https://firebasestorage.googleapis.com/v0/b/ecommercytest.firebasestorage.app/o/{encoded}?alt=media"
+            new_url = f"https://firebasestorage.googleapis.com/v0/b/ecommercy-restoran.firebasestorage.app/o/{encoded}?alt=media"
             new_images.append(new_url)
             updated = True
         else:
