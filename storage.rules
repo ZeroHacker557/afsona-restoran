@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// Abubakr Food — Firebase Storage xavfsizlik qoidalari
+//
+// Taom rasmlari hamma uchun ochiq bo'lishi kerak (mijoz brauzeri ularni
+// <img> orqali, imzosiz ochadi). Yozishni faqat bot (Admin SDK) bajaradi —
+// Admin SDK bu qoidalarni butunlay chetlab o'tadi.
+//
+// Deploy:  firebase deploy --only storage
+// yoki Firebase Console → Storage → Rules ga nusxalang.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Taom rasmlari: hamma o'qiydi, hech kim (client) yozmaydi
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Qolgan hamma narsa yopiq
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
