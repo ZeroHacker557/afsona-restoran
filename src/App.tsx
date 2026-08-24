@@ -16,6 +16,7 @@ import { ProfileEditPage } from './pages/ProfileEditPage'
 import { ReviewsPage } from './pages/ReviewsPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { LanguagePage } from './pages/LanguagePage'
+import { SupportPage } from './pages/SupportPage'
 import { setupBackButton, toggleBackButton, watchSafeArea } from './utils/telegram'
 import { useI18n } from './i18n'
 
@@ -26,7 +27,7 @@ const AddressesPage = lazy(() =>
 
 /** Pastki menyu ko'rinmaydigan sahifalar. */
 const FULLSCREEN_PAGES = [
-  'detail', 'checkout', 'addresses', 'profile_edit', 'reviews', 'notifications', 'language',
+  'detail', 'checkout', 'addresses', 'profile_edit', 'reviews', 'notifications', 'language', 'support',
 ]
 
 function PageFallback() {
@@ -230,6 +231,12 @@ function App() {
           {shop.page === 'notifications' && (
             <div className="page-animate">
               <NotificationsPage notifications={shop.notifications} onBack={shop.goBack} />
+            </div>
+          )}
+
+          {shop.page === 'support' && (
+            <div className="page-animate">
+              <SupportPage onBack={shop.goBack} />
             </div>
           )}
         </div>

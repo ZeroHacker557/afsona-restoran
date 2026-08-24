@@ -54,7 +54,7 @@ export function ProfilePage({ profile, orders, theme, onToggleTheme, onNavigate,
       page: 'language',
       value: lang === 'ru' ? 'Русский' : "O'zbekcha",
     },
-    { icon: CircleHelp, titleKey: 'profile.help', subKey: 'profile.helpSub' },
+    { icon: CircleHelp, titleKey: 'profile.help', subKey: 'profile.helpSub', page: 'support' as const },
   ]
 
   const isDark = theme === 'dark'

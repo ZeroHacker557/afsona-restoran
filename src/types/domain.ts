@@ -1,7 +1,7 @@
 export type AppPage =
   | 'home' | 'catalog' | 'favorites' | 'orders' | 'profile'
   | 'detail' | 'checkout' | 'addresses' | 'profile_edit'
-  | 'reviews' | 'notifications' | 'language'
+  | 'reviews' | 'notifications' | 'language' | 'support'
 
 export type Product = {
   id: number
