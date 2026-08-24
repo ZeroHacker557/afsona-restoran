@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
+import { initializeFirestore, collection, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { parseDate } from '../utils/date'
 import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notification, UserProfile } from '../types/domain'
@@ -16,7 +16,14 @@ const firebaseConfig = {
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig)
-export const db = getFirestore(app)
+
+// MUHIM: Firestore standart "WebChannel" (streaming) transporti Telegram
+// ichki brauzerida (WebView) ko'pincha bloklanadi — natijada yozishlar
+// (masalan manzil saqlash) hech qachon tugamay "qotib" qoladi. Long-polling
+// rejimi bu muhitlarda ishonchli ishlaydi (Telegram Mini App uchun zarur).
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+})
 export const storage = getStorage(app)
 
 // Real-time Firestore Listeners
