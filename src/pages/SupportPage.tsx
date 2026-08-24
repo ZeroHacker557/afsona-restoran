@@ -170,7 +170,7 @@ export function SupportPage({ onBack }: Props) {
         <div
           className="relative overflow-hidden rounded-3xl p-6"
           style={{
-            background: 'linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 70%, #7c3aed) 100%)',
+            background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%)',
           }}
         >
           {/* Decorative circles */}

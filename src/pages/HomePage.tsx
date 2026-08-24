@@ -3,7 +3,7 @@ import {
   ArrowRight, Bell, CircleHelp, Heart, Leaf, Search,
   ShieldCheck, Truck, UtensilsCrossed,
 } from 'lucide-react'
-import heroImg from '../images/hero-img.webp'
+import heroImg from '../images/hero-food.png'
 import { ProductCard } from '../components/product/ProductCard'
 import { ProductRowSkeleton } from '../components/ui/ProductCardSkeleton'
 import { CartButton } from '../components/ui/CartButton'
@@ -91,7 +91,7 @@ export function HomePage({
             <div className="relative z-10 max-w-[62%] sm:max-w-[360px]">
               <span
                 className="inline-block rounded-full px-3 py-1 text-xs font-bold"
-                style={{ background: 'var(--surface)', color: 'var(--brand)' }}
+                style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
               >
                 {t('home.heroBadge')}
               </span>

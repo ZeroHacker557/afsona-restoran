@@ -2,7 +2,7 @@
 BOT_TOKEN    = "8777868330:AAFhQN_1-YgYPo9ukYmElAFaJYogO3k0f6s"
 BOT_USERNAME = "abubakrfood_bot"
 ADMIN_IDS    = {7203124812}   # Barcha adminlar (o'z Telegram ID'ingizni qo'ying)
-MINI_APP_URL = "https://ecommercy.vercel.app"
+MINI_APP_URL = "https://ecommercy-restoran.vercel.app"
 API_HOST     = "0.0.0.0"
 API_PORT     = 8080
 IMAGES_DIR   = "images"

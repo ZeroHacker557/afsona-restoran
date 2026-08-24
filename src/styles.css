@@ -31,13 +31,19 @@
   --line: #ececf2;
   --line-soft: #f4f4f8;
 
-  /* Brend */
-  --brand: #7c3aed;
-  --brand-strong: #6d28d9;
+  /* Brend — qizil */
+  --brand: #e23744;
+  --brand-strong: #c42232;
   --brand-ink: #ffffff;
-  --brand-soft: #f5f0ff;
-  --brand-soft-2: #ece4ff;
-  --brand-line: #ddd0ff;
+  --brand-soft: #fdeef0;
+  --brand-soft-2: #fbdde1;
+  --brand-line: #f6c2c8;
+
+  /* Urg'u — sariq/amber */
+  --accent: #f5a300;
+  --accent-strong: #db8e00;
+  --accent-ink: #3d2600;
+  --accent-soft: #fff6e6;
 
   /* Semantik */
   --success: #16a34a;
@@ -58,7 +64,7 @@
   --shadow-sm: 0 1px 2px rgb(16 12 34 / 0.04), 0 1px 3px rgb(16 12 34 / 0.03);
   --shadow-md: 0 2px 4px rgb(16 12 34 / 0.04), 0 8px 20px rgb(16 12 34 / 0.06);
   --shadow-lg: 0 4px 8px rgb(16 12 34 / 0.05), 0 16px 36px rgb(16 12 34 / 0.09);
-  --shadow-brand: 0 6px 20px rgb(124 58 237 / 0.22);
+  --shadow-brand: 0 6px 20px rgb(226 55 68 / 0.22);
 
   /* Telegram xavfsiz zonasi (JS to'ldiradi) */
   --safe-bottom: 0px;
@@ -82,12 +88,17 @@
     --line: #2b2837;
     --line-soft: #221f2c;
 
-    --brand: #a78bfa;
-    --brand-strong: #8b5cf6;
-    --brand-ink: #14121c;
-    --brand-soft: #241d3a;
-    --brand-soft-2: #2d2447;
-    --brand-line: #3d3260;
+    --brand: #f2626f;
+    --brand-strong: #e23744;
+    --brand-ink: #1a0d0f;
+    --brand-soft: #3a1c20;
+    --brand-soft-2: #4a2228;
+    --brand-line: #5e2e34;
+
+    --accent: #f5b733;
+    --accent-strong: #f5a300;
+    --accent-ink: #2a1c00;
+    --accent-soft: #3a2e12;
 
     --success: #4ade80;
     --success-soft: #16281d;
@@ -121,12 +132,17 @@
   --line: #2b2837;
   --line-soft: #221f2c;
 
-  --brand: #a78bfa;
-  --brand-strong: #8b5cf6;
-  --brand-ink: #14121c;
-  --brand-soft: #241d3a;
-  --brand-soft-2: #2d2447;
-  --brand-line: #3d3260;
+  --brand: #f2626f;
+  --brand-strong: #e23744;
+  --brand-ink: #1a0d0f;
+  --brand-soft: #3a1c20;
+  --brand-soft-2: #4a2228;
+  --brand-line: #5e2e34;
+
+  --accent: #f5b733;
+  --accent-strong: #f5a300;
+  --accent-ink: #2a1c00;
+  --accent-soft: #3a2e12;
 
   --success: #4ade80;
   --success-soft: #16281d;
@@ -419,8 +435,8 @@ a { color: inherit; text-decoration: none; }
   padding: 3px 8px;
   font-size: 0.7rem;
   font-weight: 800;
-  background: var(--brand-strong);
-  color: var(--brand-ink);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 .product-card-badge.muted {
   background: var(--surface-3);
@@ -873,7 +889,7 @@ a { color: inherit; text-decoration: none; }
   position: relative;
   overflow: hidden;
   border-radius: var(--r-lg);
-  background: linear-gradient(135deg, var(--brand-soft) 0%, var(--brand-soft-2) 100%);
+  background: linear-gradient(135deg, var(--brand-soft) 0%, var(--accent-soft) 100%);
   color: var(--ink);
 }
 
