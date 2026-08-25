@@ -128,12 +128,12 @@ export function ProductDetailPage({
           </span>
         )}
         <div
-          className="mx-auto grid h-[280px] w-full place-items-center overflow-hidden rounded-2xl sm:h-[380px]"
+          className="mx-auto flex h-[280px] w-full items-center justify-center overflow-hidden rounded-2xl sm:h-[380px]"
           style={{ background: 'var(--surface-2)', opacity: soldOut ? 0.55 : 1 }}
         >
           {images[activeImage] ? (
             <img
-              className="size-full object-contain p-4"
+              className="max-h-full max-w-full object-contain p-4"
               src={getImageUrl(images[activeImage])}
               alt={product.name}
               decoding="async"
