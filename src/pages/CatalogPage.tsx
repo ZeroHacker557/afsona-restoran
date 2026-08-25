@@ -5,6 +5,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { ProductCard } from '../components/product/ProductCard'
 import { ProductGridSkeleton } from '../components/ui/ProductCardSkeleton'
 import { categoryIcon } from '../utils/category-icons'
+import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { useT } from '../i18n'
 import type { Category, Product, ProductActions } from '../types/domain'
 
@@ -34,6 +35,7 @@ export function CatalogPage({
 }: Props) {
   const t = useT()
   const ALL = t('common.all')
+  const categoryStripRef = useAutoScroll<HTMLElement>()
 
   const [active, setActive] = useState(initialCategory || ALL)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -112,7 +114,7 @@ export function CatalogPage({
       <PageHeader title={t('catalog.title')} onSearch={onSearch} onCart={onOpenCart} cartCount={cartCount} />
 
       {/* Kategoriyalar */}
-      <section className="category-strip scrollbar-none mt-6">
+      <section ref={categoryStripRef} className="category-strip scrollbar-none mt-6">
         {displayCategories.map((category) => {
           const Icon = category.name === ALL ? Grid2X2 : categoryIcon(category.icon, category.name)
           return (

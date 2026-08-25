@@ -9,6 +9,7 @@ import { ProductRowSkeleton } from '../components/ui/ProductCardSkeleton'
 import { CartButton } from '../components/ui/CartButton'
 import { IconButton } from '../components/ui/IconButton'
 import { categoryIcon } from '../utils/category-icons'
+import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { useT, type TranslationKey } from '../i18n'
 import type { AppPage, Category, Product, ProductActions } from '../types/domain'
 
@@ -37,6 +38,7 @@ export function HomePage({
   onOpenCategory, onOpenCart, unreadNotificationsCount, onNotify, ...productActions
 }: Props) {
   const t = useT()
+  const categoryStripRef = useAutoScroll<HTMLDivElement>()
 
   return (
     <>
@@ -124,7 +126,7 @@ export function HomePage({
       {/* Kategoriyalar — bazadan, bosilganda katalog filtrlanadi */}
       {categories.length > 0 && (
         <section className="mt-6">
-          <div className="category-strip scrollbar-none">
+          <div ref={categoryStripRef} className="category-strip scrollbar-none">
             {categories.map((category) => {
               const Icon = categoryIcon(category.icon, category.name)
               return (
