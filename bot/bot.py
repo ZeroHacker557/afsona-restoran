@@ -47,6 +47,26 @@ STATUS_EMOJI = {
     "Bekor qilingan": "🔴",
 }
 
+# Status → ilova ichidagi (Firestore) notifikatsiya sarlavha va matni.
+# {id} — foydalanuvchiga ko'rinadigan buyurtma raqami.
+STATUS_NOTIF = {
+    "Qabul qilindi":  ("✅ Buyurtma qabul qilindi", "Buyurtmangiz {id} qabul qilindi va tayyorlanmoqda."),
+    "Yetkazilmoqda":  ("🚚 Buyurtma yo'lda", "Buyurtmangiz {id} yetkazib berilmoqda — tez orada yetib boradi!"),
+    "Yetkazildi":     ("🎉 Buyurtma yetkazildi", "Buyurtmangiz {id} yetkazildi. Yoqimli ishtaha! Baho qoldirishni unutmang."),
+    "Rad etildi":     ("❌ Buyurtma rad etildi", "Afsuski, buyurtmangiz {id} rad etildi. Savol bo'lsa biz bilan bog'laning."),
+    "Bekor qilingan": ("🚫 Buyurtma bekor qilindi", "Buyurtmangiz {id} bekor qilindi."),
+}
+
+
+def push_notification(user_id, title: str, body: str):
+    """Ilova ichidagi bildirishnoma yaratadi (xatoliklarni yutadi)."""
+    if not user_id:
+        return
+    try:
+        db.send_notification(int(user_id), title, body, "order")
+    except Exception as e:
+        logger.warning(f"[NOTIF] yozib bo'lmadi ({user_id}): {e}")
+
 
 # ─── Klaviaturalar ────────────────────────────────────────────
 
@@ -320,6 +340,12 @@ async def notify_admin_order(order_data: dict):
                 logger.warning(f"[ADMIN] {admin_id} ga yuborib bo'lmadi: {e}")
         logger.info(f"[ADMIN] Yuborildi: {order_id} | {pay_method}")
 
+        # ── Ilova ichidagi bildirishnoma (yangi buyurtma) ─────
+        push_notification(
+            user_id, "🎉 Buyurtma qabul qilindi",
+            f"Buyurtmangiz {order_id} qabul qilindi. Tez orada siz bilan bog'lanamiz."
+        )
+
         # ── USER XABARI (faqat Karta) ─────────────────────────
         if pay_method == "Karta":
             if not user_id:
@@ -421,6 +447,12 @@ async def cb_order_status(callback: CallbackQuery):
             await bot.send_message(order["userId"], u_text, reply_markup=mini_app_kb())
         except Exception as e:
             logger.warning(f"[USER] Status xabar xatosi: {e}")
+
+        # Ilova ichidagi bildirishnoma
+        n_title, n_body = STATUS_NOTIF.get(
+            status, ("📦 Buyurtma yangilandi", "Buyurtmangiz {id} holati o'zgardi: " + status)
+        )
+        push_notification(order["userId"], n_title, n_body.format(id=display_id))
 
     # Admin xabarini yangilash
     old = callback.message.html_text
@@ -544,6 +576,14 @@ async def cb_payment_confirm(callback: CallbackQuery):
             await bot.send_message(user_id, u_text, reply_markup=resend_receipt_kb(order_id))
     except Exception as e:
         logger.warning(f"[PAY] Mijozga xabar yuborilmadi: {e}")
+
+    # Ilova ichidagi bildirishnoma
+    if approved:
+        push_notification(user_id, "💰 To'lov tasdiqlandi",
+                          f"Buyurtmangiz {display_id} uchun to'lov qabul qilindi.")
+    else:
+        push_notification(user_id, "⚠️ To'lov rad etildi",
+                          f"Buyurtmangiz {display_id} uchun to'lov cheki rad etildi. Iltimos, chekni qayta yuboring.")
 
     # ── Chek xabarini SHU YERNING O'ZIDA yangilaymiz ──
     # Ilgari bu yerda har bir adminga alohida "statusni o'zgartiring"
