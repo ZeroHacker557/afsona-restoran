@@ -64,9 +64,16 @@ export const STATUS_NOTIF: Record<string, { title: string; body: (id: string) =>
   },
 }
 
+/**
+ * Mijozga yuboriladigan "Ilovani ochish" tugmasi.
+ *
+ * `miniApp: true` — Telegram uni web_app tugmasi qilib chizadi va ilova
+ * Telegram ichida ochiladi. Oddiy havola bo'lsa, brauzerga olib chiqib
+ * ketardi va mijoz u yerda "Telegram'da oching" ekranini ko'rardi.
+ */
 export function miniAppButton(): Button[] {
   const url = process.env.MINI_APP_URL
-  return url ? [{ text: '🍽 Ilovani ochish', url }] : []
+  return url ? [{ text: '🍽 Ilovani ochish', url, miniApp: true }] : []
 }
 
 /** Ilova ichidagi bildirishnoma yozadi (xatolik butun amalni to'xtatmaydi). */

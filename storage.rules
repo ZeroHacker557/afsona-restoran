@@ -32,10 +32,18 @@ service firebase.storage {
       allow write: if isAdmin() && request.resource.size < 45 * 1024 * 1024;
     }
 
-    // Mijoz yuborgan to'lov cheklari
-    match /receipts/{allPaths=**} {
-      allow read: if isAdmin();
+    // Mijoz yuborgan to'lov cheklari.
+    //
+    // Yo'l: receipts/<foydalanuvchi id>/<fayl>. Shu tufayli har kim faqat
+    // O'Z papkasi bilan ishlaydi.
+    //
+    // O'qishga ruxsat mijozga ham kerak: fayl yuklangandan keyin ilova
+    // getDownloadURL() chaqiradi — bu o'qish amali. Busiz yuklash o'tib,
+    // havola olishda "storage/unauthorized" chiqadi.
+    match /receipts/{userId}/{allPaths=**} {
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == userId);
       allow write: if request.auth != null
+                   && request.auth.uid == userId
                    && request.resource.size < 8 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
     }

@@ -349,9 +349,19 @@ async function handleBroadcast(req: VercelRequest, res: VercelResponse) {
   if (!chatIds.length) return fail(res, 400, 'Qabul qiluvchilar yo‘q')
   if (!text && !photoUrl && !videoUrl) return fail(res, 400, 'Xabar bo‘sh')
 
+  // Admin qo'lda tugma qo'ysa — oddiy havola. Lekin havola mini app'niki
+  // bo'lsa, uni Telegram ichida ochadigan tugma qilamiz.
+  const miniAppUrl = process.env.MINI_APP_URL || ''
+  const customUrl = body?.buttonUrl ? String(body.buttonUrl) : ''
   const buttons =
-    body?.buttonText && body?.buttonUrl
-      ? [{ text: String(body.buttonText).slice(0, 40), url: String(body.buttonUrl) }]
+    body?.buttonText && customUrl
+      ? [
+          {
+            text: String(body.buttonText).slice(0, 40),
+            url: customUrl,
+            miniApp: Boolean(miniAppUrl) && customUrl.startsWith(miniAppUrl),
+          },
+        ]
       : miniAppButton()
 
   let sent = 0

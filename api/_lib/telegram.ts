@@ -40,11 +40,28 @@ async function call(method: string, payload: Record<string, unknown>): Promise<S
   return { ok: false, error: description, blocked }
 }
 
-export type Button = { text: string; url: string }
+export type Button = {
+  text: string
+  url: string
+  /**
+   * true — tugma mini app'ni TELEGRAM ICHIDA ochadi (web_app).
+   * false/berilmagan — oddiy havola, ya'ni brauzerda ochiladi.
+   *
+   * Telegram cheklovi: web_app tugmasi faqat SHAXSIY chatlarda ishlaydi.
+   * Guruhga yuboriladigan xabarlarda oddiy havolani ishlating.
+   */
+  miniApp?: boolean
+}
 
 function markup(buttons?: Button[]) {
   if (!buttons?.length) return undefined
-  return { inline_keyboard: buttons.map((b) => [{ text: b.text, url: b.url }]) }
+  return {
+    inline_keyboard: buttons.map((button) => [
+      button.miniApp
+        ? { text: button.text, web_app: { url: button.url } }
+        : { text: button.text, url: button.url },
+    ]),
+  }
 }
 
 export function sendMessage(chatId: number | string, text: string, buttons?: Button[]) {
