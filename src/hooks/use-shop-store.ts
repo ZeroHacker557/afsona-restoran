@@ -70,6 +70,8 @@ export function useShopStore() {
   // Bitta rasmiylashtirish uchun bitta kalit. Xato bo'lsa saqlanadi —
   // qayta urinishda server yangi buyurtma yaratmaydi.
   const orderKeyRef = useRef<string | null>(null)
+  // "Buyurtma qabul qilindi" kartasini o'zi yopadigan taymer
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isAuthenticated, setAuthenticated] = useState(false)
   const [orderForm, setOrderForm] = useState<OrderForm>({
     name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd',
@@ -410,10 +412,33 @@ export function useShopStore() {
     setCheckoutDone(true)
     hapticSuccess()
     notify(t('checkout.success'))
-    setTimeout(() => setCheckoutDone(false), 4000)
+
+    // Foydalanuvchi tegmasa, karta o'zi yopiladi
+    if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    successTimerRef.current = setTimeout(() => setCheckoutDone(false), 4000)
 
     return true
   }, [isSubmitting, orderForm, cartProducts, notify, t, hours])
+
+  /**
+   * "Buyurtma qabul qilindi" kartasini darhol yopadi.
+   *
+   * Ilgari kartani faqat 4 soniyalik taymer yopardi: "Buyurtmalarni
+   * ko'rish" bosilganda sahifa almashardi-yu, karta ustida osilib
+   * turaverardi.
+   */
+  const closeCheckoutSuccess = useCallback(() => {
+    if (successTimerRef.current) {
+      clearTimeout(successTimerRef.current)
+      successTimerRef.current = null
+    }
+    setCheckoutDone(false)
+  }, [])
+
+  // Komponent yopilsa taymer ham to'xtaydi
+  useEffect(() => () => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current)
+  }, [])
 
   return {
     page, history, canGoBack: history.length > 0 || isCartOpen || isSearchOpen,
@@ -421,7 +446,7 @@ export function useShopStore() {
     cartItems, cartCount, cartTotal, cartProducts,
     likedIds, selectedProduct,
     isSearchOpen, isCartOpen, query, searchResults, toast,
-    myOrders, checkoutDone, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
+    myOrders, checkoutDone, closeCheckoutSuccess, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
     notifications, unreadNotificationsCount,
     hours, openState: getOpenState(hours),
     closedNotice, dismissClosedNotice: () => setClosedNotice(null),

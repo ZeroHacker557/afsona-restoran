@@ -95,7 +95,14 @@ function App() {
         )}
 
         {shop.toast && <Toast message={shop.toast} onClose={shop.clearToast} />}
-        {shop.checkoutDone && <CheckoutSuccess onViewOrders={() => shop.navigate('orders')} />}
+        {shop.checkoutDone && (
+          <CheckoutSuccess
+            onViewOrders={() => {
+              shop.closeCheckoutSuccess()
+              shop.navigate('orders')
+            }}
+          />
+        )}
 
         {shop.closedNotice && (
           <ClosedNotice
