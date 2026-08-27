@@ -12,7 +12,7 @@ import { categoryIcon } from '../utils/category-icons'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { useT, type TranslationKey } from '../i18n'
 import type { AppPage, Category, Product, ProductActions } from '../types/domain'
-import { BRAND } from '../config/brand'
+import { BRAND, LOGO } from '../config/brand'
 
 const benefits: [LucideIcon, TranslationKey, TranslationKey][] = [
   [Truck, 'benefit.delivery', 'benefit.deliverySub'],
@@ -46,12 +46,13 @@ export function HomePage({
       {/* Header */}
       <header className="flex items-center justify-between px-5 pt-7 sm:px-10">
         <div className="flex items-center gap-2">
-          <span
-            className="grid size-11 place-items-center rounded-xl"
-            style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
-          >
-            <UtensilsCrossed />
-          </span>
+          <img
+            src={LOGO}
+            alt={BRAND.fullName}
+            className="size-11 rounded-xl object-cover"
+            width={44}
+            height={44}
+          />
           <b className="text-2xl tracking-tight sm:text-3xl" style={{ color: 'var(--ink)' }}>
             {BRAND.name}<span style={{ color: 'var(--brand)' }}> {BRAND.nameSuffix}</span>
           </b>

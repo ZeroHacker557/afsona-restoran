@@ -33,7 +33,7 @@ import { AdminsPage } from './pages/AdminsPage'
 import { ToastHost } from './components/Toast'
 import { toast } from './lib/toast'
 import { Spinner } from './components/ui'
-import { BRAND } from '../config/brand'
+import { BRAND, LOGO } from '../config/brand'
 import { applyTheme, getStoredTheme, storeTheme, type ThemeMode } from '../utils/theme'
 import { getOpenState } from '../utils/hours'
 import { saveSetting } from './lib/db'
@@ -107,7 +107,7 @@ export default function AdminApp() {
   if (state === 'out') {
     return (
       <>
-        <LoginPage onDone={() => setState('checking')} />
+        <LoginPage />
         <ToastHost />
       </>
     )
@@ -170,9 +170,7 @@ function Shell({ email }: { email: string }) {
 
       <aside className={`adm-sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="adm-logo">
-          <span className="adm-logo-mark">
-            <UtensilsCrossed size={20} />
-          </span>
+          <img src={LOGO} alt={BRAND.fullName} className="adm-logo-mark object-cover" />
           <span>
             {BRAND.name}
             <span style={{ color: 'var(--brand)' }}> {BRAND.nameSuffix}</span>

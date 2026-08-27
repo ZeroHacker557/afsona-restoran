@@ -1,17 +1,22 @@
 import { useState, type FormEvent } from 'react'
-import { Eye, EyeOff, KeyRound, LogIn, UtensilsCrossed } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, LogIn } from 'lucide-react'
 import { signIn } from '../lib/auth'
-import { BRAND } from '../../config/brand'
+import { BRAND, LOGO } from '../../config/brand'
 import { Field, Spinner } from '../components/ui'
 
 /**
  * Panelga kirish oynasi.
  *
+ * Muvaffaqiyatli kirishdan keyin bu yerda hech narsa qilinmaydi: sessiya
+ * o'zgarishini AdminApp dagi `onAdminAuthChanged` tinglaydi va panelni
+ * o'zi ochadi. (Ilgari bu yerdan ham holat o'zgartirilar edi — ikkisi
+ * bir-birini bosib, panel "tekshirilmoqda" da qotib qolardi.)
+ *
  * Pastda "birinchi sozlash" bo'limi bor: hali bironta admin yaratilmagan
  * bo'lsa (yoki parol yo'qolgan bo'lsa), Vercel'dagi ADMIN_SETUP_KEY kaliti
  * bilan hisob yaratiladi.
  */
-export function LoginPage({ onDone }: { onDone: () => void }) {
+export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [visible, setVisible] = useState(false)
@@ -25,11 +30,10 @@ export function LoginPage({ onDone }: { onDone: () => void }) {
     setError('')
     try {
       await signIn(email, password)
-      onDone()
+      // Panelni AdminApp ochadi — shu yerda kutib turamiz
     } catch (problem) {
-      setError(problem instanceof Error ? problem.message : 'Kirishda xato')
-    } finally {
       setBusy(false)
+      setError(problem instanceof Error ? problem.message : 'Kirishda xato')
     }
   }
 
@@ -38,9 +42,12 @@ export function LoginPage({ onDone }: { onDone: () => void }) {
       <div className="w-full max-w-[380px]">
         <div className="adm-card" style={{ padding: 26 }}>
           <div className="flex flex-col items-center gap-3 text-center">
-            <span className="adm-logo-mark" style={{ height: 52, width: 52, borderRadius: 16 }}>
-              <UtensilsCrossed size={26} />
-            </span>
+            <img
+              src={LOGO}
+              alt={BRAND.fullName}
+              className="object-cover"
+              style={{ height: 56, width: 56, borderRadius: 16 }}
+            />
             <div>
               <h1 className="text-xl font-extrabold tracking-tight">
                 {BRAND.name}

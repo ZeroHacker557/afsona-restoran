@@ -58,19 +58,33 @@ export async function claimAdmin(user: User): Promise<AdminSession> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ action: 'session' }),
-  })
+  }).catch(() => null)
 
-  const payload = (await response.json().catch(() => null)) as
-    | { ok?: boolean; email?: string; refreshed?: boolean; error?: string }
-    | null
+  const payload = response
+    ? ((await response.json().catch(() => null)) as
+        | { ok?: boolean; email?: string; refreshed?: boolean; error?: string }
+        | null)
+    : null
 
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.error || 'Ruxsat tekshirilmadi')
+  // Server aniq "yo'q" desa — kiritmaymiz (ro'yxatdan chiqarilgan admin)
+  if (response && (response.status === 401 || response.status === 403)) {
+    throw new Error(payload?.error || 'Ruxsat yo‘q')
   }
 
-  if (payload.refreshed) await user.getIdToken(true)
+  if (response?.ok && payload?.ok) {
+    if (payload.refreshed) await user.getIdToken(true)
+    return { email: payload.email || user.email || '' }
+  }
 
-  return { email: payload.email || user.email || '' }
+  // Serverga yetib bo'lmadi (lokal `npm run dev` da /api ishlamaydi yoki
+  // vaqtinchalik uzilish). Tokenda huquq allaqachon bo'lsa — kiritamiz.
+  const claims = (await user.getIdTokenResult()).claims
+  if (claims.admin === true) {
+    console.warn('[admin-auth] /api/admin javob bermadi — mavjud huquq bilan davom etamiz')
+    return { email: user.email || '' }
+  }
+
+  throw new Error(payload?.error || 'Ruxsat tekshirilmadi')
 }
 
 export async function signIn(email: string, password: string): Promise<AdminSession> {

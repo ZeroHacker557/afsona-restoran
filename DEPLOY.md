@@ -15,17 +15,39 @@ Loyiha uch qismdan iborat:
 
 ---
 
-## 1. Bot tokeni
+## 1. Bot tokeni — ✅ sozlangan
 
-[@BotFather](https://t.me/BotFather) → `/mybots` → botni tanlang → **API Token**.
-Eski loyihadan ko'chirilgan token ishlatilmasin — **Revoke current token**
-bosib yangisini oling.
+Bot: [@afsonarestoran_bot](https://t.me/afsonarestoran_bot). Token
+`.env` faylida va Vercel `BOT_TOKEN` o'zgaruvchisida bo'lishi kerak.
 
-Token ikki joyga kerak: Vercel `BOT_TOKEN` va `.env` fayli.
+> Token — butun himoyaning kaliti: mini app imzosi ham u bilan
+> tekshiriladi. Sizib chiqsa, [@BotFather](https://t.me/BotFather) →
+> `/mybots` → bot → **API Token** → **Revoke current token** qiling va
+> yangisini ikkala joyga qo'ying.
 
 ---
 
-## 2. Firebase
+## 2. Firebase — ✅ sozlangan
+
+> Quyidagilar **allaqachon bajarilgan** (`afsona-restorani` loyihasi):
+> Firestore, Storage, Authentication (Email/Password), qoidalar, admin
+> hisobi va boshlang'ich sozlamalar. Bu bo'lim — ma'lumot uchun va
+> loyiha boshqa Firebase'ga ko'chirilsa kerak bo'ladi.
+
+### Qanday qilingan (yordamchi skriptlar)
+
+```bash
+node scripts/setup-firebase.mjs "admin@email" "parol"   # admin hisobi + sozlamalar
+node scripts/deploy-rules.mjs                            # firestore.rules + storage.rules
+node scripts/vercel-env.mjs                              # Vercel env qiymatlari
+```
+
+Skriptlar loyiha ildizidagi `.env` va service account JSON faylidan
+foydalanadi. `setup-firebase.mjs` mavjud ma'lumot ustiga yozmaydi.
+
+---
+
+## 2a. Firebase — qo'lda sozlash tartibi
 
 1. **Firestore Database** yarating (Production mode).
 2. **Storage** yoqing — taom rasmlari va cheklar shu yerda saqlanadi.
@@ -61,8 +83,15 @@ Claim'ni faqat server (`/api/admin`) qo'yadi.
 ## 3. Vercel Environment Variables
 
 Loyiha → **Settings** → **Environment Variables**. Hammasini
-Production, Preview va Development uchun qo'shing
-([`.env.example`](./.env.example) da izohlari bor):
+Production, Preview va Development uchun qo'shing.
+
+Tayyor qiymatlarni chiqarish uchun:
+
+```bash
+node scripts/vercel-env.mjs
+```
+
+Ro'yxat ([`.env.example`](./.env.example) da izohlari bor):
 
 | O'zgaruvchi | Nima uchun |
 |---|---|
@@ -79,15 +108,15 @@ build'ga qo'llaydi.
 
 ---
 
-## 4. Birinchi adminni yaratish
+## 4. Adminlar — ✅ birinchi hisob yaratilgan
 
-1. `https://sizning-domen.vercel.app/admin` ni oching
-2. Pastdagi **«Birinchi sozlash / parolni tiklash»** tugmasini bosing
-3. `ADMIN_SETUP_KEY`, email va yangi parolni kiriting
-4. Endi shu email va parol bilan kiring
+Panelga kirish: `https://afsona-restoran.vercel.app/admin`
 
 Keyingi adminlar panelning **Adminlar** bo'limidan qo'shiladi.
-Parol unutilsa — xuddi shu «Birinchi sozlash» oynasi orqali tiklanadi.
+
+**Parol unutilsa:** login sahifasidagi «Birinchi sozlash / parolni tiklash»
+tugmasini bosing va `ADMIN_SETUP_KEY` (`.env` faylida) bilan yangi parol
+qo'ying. Bu yo'l `ADMIN_SETUP_KEY` Vercel'da sozlangan bo'lsagina ishlaydi.
 
 ---
 
@@ -103,9 +132,9 @@ Parol unutilsa — xuddi shu «Birinchi sozlash» oynasi orqali tiklanadi.
 - **Restoran va aloqa** — telefon, Telegram, email, manzil.
   Ilovadagi «Yordam» sahifasi shu yerdan o'qiydi.
 
-**Adminlar** bo'limida — o'z Telegram ID'ingizni qo'shing
-(ID'ni [@userinfobot](https://t.me/userinfobot) aytadi). Yangi buyurtma
-kelganda shu chatga xabar tushadi.
+**Adminlar** bo'limida — Telegram ID'lar ro'yxati. Sizniki (`7203124812`)
+allaqachon qo'shilgan; boshqa ID'ni [@userinfobot](https://t.me/userinfobot)
+aytadi. Yangi buyurtma kelganda shu chatlarga xabar tushadi.
 
 Keyin **Kategoriyalar** → **Taomlar** ni to'ldiring.
 
@@ -121,7 +150,7 @@ pip install -r requirements.txt
 python bot.py
 ```
 
-`.env` fayli loyiha ildizida bo'lishi kerak (`.env.example` dan nusxa).
+`.env` fayli loyiha ildizida allaqachon to'ldirilgan (git'ga tushmaydi).
 Bot doimiy ishlashi uchun uni VPS yoki Railway'ga qo'ying — lekin
 o'chib qolsa ham buyurtmalar yo'qolmaydi.
 

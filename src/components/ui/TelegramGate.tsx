@@ -1,5 +1,4 @@
-import { UtensilsCrossed } from 'lucide-react'
-import { BRAND, BOT_URL } from '../../config/brand'
+import { BRAND, BOT_URL, LOGO } from '../../config/brand'
 
 
 /**
@@ -16,12 +15,13 @@ export function TelegramGate() {
         className="w-full max-w-sm rounded-[24px] p-8 text-center"
         style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-md)' }}
       >
-        <span
-          className="mx-auto grid size-16 place-items-center rounded-2xl"
-          style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
-        >
-          <UtensilsCrossed size={30} />
-        </span>
+        <img
+          src={LOGO}
+          alt={BRAND.fullName}
+          className="mx-auto size-16 rounded-2xl object-cover"
+          width={64}
+          height={64}
+        />
 
         <h1 className="mt-6 text-2xl font-extrabold" style={{ color: 'var(--ink)' }}>
           {BRAND.name}<span style={{ color: 'var(--brand)' }}> {BRAND.nameSuffix}</span>

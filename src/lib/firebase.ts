@@ -14,13 +14,13 @@ import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notif
 //  Firebase Auth orqali ta'minlanadi.
 // ══════════════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyCzvCSShxNSDPTGhSctnOuwtqpbOlOs3OQ",
-  authDomain: "ecommercy-restoran.firebaseapp.com",
-  projectId: "ecommercy-restoran",
-  storageBucket: "ecommercy-restoran.firebasestorage.app",
-  messagingSenderId: "346006739182",
-  appId: "1:346006739182:web:d1cd0b98f9d024519e7bff",
-  measurementId: "G-RJ6Q8MCELF"
+  apiKey: "AIzaSyAoa0w2OVpLMhickoopnNk621GGoxiqgu4",
+  authDomain: "afsona-restorani.firebaseapp.com",
+  projectId: "afsona-restorani",
+  storageBucket: "afsona-restorani.firebasestorage.app",
+  messagingSenderId: "712924363405",
+  appId: "1:712924363405:web:22ebd77884a496190c40c4",
+  measurementId: "G-3YVL284MSF"
 }
 
 // Initialize Firebase

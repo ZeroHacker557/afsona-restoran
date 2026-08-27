@@ -14,12 +14,18 @@ export const BRAND = {
   /** To'liq nom — sarlavhalar va xabarlar uchun. */
   fullName: 'Afsona Restaurant',
   /** Telegram bot foydalanuvchi nomi, @ belgisisiz. */
-  botUsername: 'afsona_bot',
+  botUsername: 'afsonarestoran_bot',
   /** Aloqa — admin panelda o'zgartiriladi. */
-  phone: '+998 00 000 00 00',
-  telegram: 'afsona_support',
-  email: 'info@afsona.uz',
-  address: '',
+  phone: '+998 93 647 83 83',
+  telegram: 'Sherzod_022',
+  email: 'abubakrfrontend@gmail.com',
+  address: 'Olmaliq',
 } as const
 
 export const BOT_URL = `https://t.me/${BRAND.botUsername}`
+
+/**
+ * Logotip rasmi. Vite uni bundle'ga qo'shadi va xeshlangan yo'l beradi —
+ * shuning uchun `<img src={LOGO} />` deb ishlatiladi.
+ */
+export { default as LOGO } from '../images/logo.jpg'
