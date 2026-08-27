@@ -6,7 +6,7 @@ import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import { updateUserProfile } from '../lib/firebase'
 import { auth } from '../lib/auth'
-import { hapticFeedback, hapticSuccess } from '../utils/telegram'
+import { hapticError, hapticFeedback, hapticSuccess } from '../utils/telegram'
 import { useT } from '../i18n'
 import type { Address, UserProfile } from '../types/domain'
 
@@ -75,8 +75,15 @@ export function AddressesPage({ profile, onBack, onNotify }: Props) {
       return
     }
 
+    // Manzil foydalanuvchi hujjatiga yoziladi — buning uchun tizimga
+    // kirgan bo'lish shart. Ilgari bu yerda jimgina `return` bor edi:
+    // tugma bosilardi, lekin hech narsa bo'lmasdi.
     const uid = auth.currentUser?.uid
-    if (!uid) return
+    if (!uid) {
+      hapticError()
+      onNotify(t('common.notSignedIn'))
+      return
+    }
 
     setLoading(true)
     try {
@@ -93,6 +100,10 @@ export function AddressesPage({ profile, onBack, onNotify }: Props) {
       setLocation(null)
       hapticSuccess()
       onNotify(t('address.saved'))
+    } catch (error) {
+      console.error('[Manzil] saqlanmadi:', error)
+      hapticError()
+      onNotify(t('common.saveFailed'))
     } finally {
       setLoading(false)
     }
@@ -100,10 +111,20 @@ export function AddressesPage({ profile, onBack, onNotify }: Props) {
 
   const handleDeleteAddress = async (id: string) => {
     const uid = auth.currentUser?.uid
-    if (!uid) return
-    await updateUserProfile(Number(uid), { addresses: addresses.filter((a) => a.id !== id) })
-    hapticFeedback('light')
-    onNotify(t('address.deleted'))
+    if (!uid) {
+      onNotify(t('common.notSignedIn'))
+      return
+    }
+
+    try {
+      await updateUserProfile(Number(uid), { addresses: addresses.filter((a) => a.id !== id) })
+      hapticFeedback('light')
+      onNotify(t('address.deleted'))
+    } catch (error) {
+      console.error('[Manzil] o‘chirilmadi:', error)
+      hapticError()
+      onNotify(t('common.saveFailed'))
+    }
   }
 
   return (

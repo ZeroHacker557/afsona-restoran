@@ -206,12 +206,21 @@ export function subscribeToUserProfile(userId: number, callback: (profile: UserP
   })
 }
 
+/**
+ * Profil maydonlarini yangilaydi.
+ *
+ * MUHIM: xato YUTILMAYDI. Ilgari u shu yerda console'ga yozilib,
+ * chaqiruvchi hech narsa sezmasdi — natijada foydalanuvchi "saqlandi"
+ * degan xabarni ko'rar, lekin manzil aslida yozilmagan bo'lardi.
+ * Endi chaqiruvchi xatoni ushlab, haqiqiy sababni ko'rsatadi.
+ */
 export async function updateUserProfile(userId: number, data: Partial<UserProfile>) {
+  const userRef = doc(db, 'users', String(userId))
   try {
-    const userRef = doc(db, 'users', String(userId))
     await updateDoc(userRef, data)
   } catch (error) {
-    console.error("Error updating user profile:", error)
+    console.error('[Firebase] Profil yangilanmadi:', error)
+    throw error
   }
 }
 

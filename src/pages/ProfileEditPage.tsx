@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronLeft, Phone, User, UserRound } from 'lucide-react'
 import { updateUserProfile } from '../lib/firebase'
 import { auth } from '../lib/auth'
-import { getTelegramUser, hapticSuccess } from '../utils/telegram'
+import { getTelegramUser, hapticError, hapticSuccess } from '../utils/telegram'
 import { useT } from '../i18n'
 import type { UserProfile } from '../types/domain'
 
@@ -43,6 +43,10 @@ export function ProfileEditPage({ profile, onBack, onNotify }: Props) {
       hapticSuccess()
       onNotify(t('profile.saved'))
       onBack()
+    } catch (error) {
+      console.error('[Profil] saqlanmadi:', error)
+      hapticError()
+      onNotify(t('common.saveFailed'))
     } finally {
       setLoading(false)
     }

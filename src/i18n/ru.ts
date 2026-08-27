@@ -16,6 +16,8 @@ export const ru: Record<TranslationKey, string> = {
   'common.soon': 'скоро!',
   'common.optional': 'необязательно',
   'common.required': 'обязательно',
+  'common.saveFailed': 'Не удалось сохранить. Проверьте интернет и повторите',
+  'common.notSignedIn': 'Вы не вошли в систему. Откройте приложение через Telegram',
 
   // ── Навигация ──
   'nav.home': 'Главная',

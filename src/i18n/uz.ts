@@ -17,6 +17,8 @@ export const uz = {
   'common.soon': 'tez orada!',
   'common.optional': 'ixtiyoriy',
   'common.required': 'majburiy',
+  'common.saveFailed': "Saqlab bo'lmadi. Internetni tekshirib, qayta urining",
+  'common.notSignedIn': "Tizimga kirilmagan. Ilovani Telegram orqali qayta oching",
 
   // ── Navigatsiya ──
   'nav.home': 'Bosh sahifa',
