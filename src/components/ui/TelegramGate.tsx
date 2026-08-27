@@ -1,6 +1,6 @@
 import { UtensilsCrossed } from 'lucide-react'
+import { BRAND, BOT_URL } from '../../config/brand'
 
-const BOT_URL = 'https://t.me/abubakrfood_bot'
 
 /**
  * Ilova Telegram tashqarisida ochilganda ko'rsatiladi.
@@ -24,7 +24,7 @@ export function TelegramGate() {
         </span>
 
         <h1 className="mt-6 text-2xl font-extrabold" style={{ color: 'var(--ink)' }}>
-          Abubakr<span style={{ color: 'var(--brand)' }}> Food</span>
+          {BRAND.name}<span style={{ color: 'var(--brand)' }}> {BRAND.nameSuffix}</span>
         </h1>
 
         <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>

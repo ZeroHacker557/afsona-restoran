@@ -9,20 +9,23 @@ from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 
-from config import CARD_NUMBER, CARD_OWNER
+from config import FIREBASE_STORAGE_BUCKET, find_service_account
 
-KEY_FILENAME = "ecommercy-restoran-firebase-adminsdk-fbsvc-1bd706bd7b.json"
-
-# Search for service account key file in root or bot dir
-key_path = KEY_FILENAME
-if not os.path.exists(key_path):
-    key_path = os.path.join(os.path.dirname(__file__), "..", KEY_FILENAME)
+key_path = find_service_account()
 
 if not firebase_admin._apps:
     cred = credentials.Certificate(key_path)
-    firebase_admin.initialize_app(cred, {
-        'storageBucket': 'ecommercy-restoran.firebasestorage.app'
-    })
+    options = {}
+    if FIREBASE_STORAGE_BUCKET:
+        options['storageBucket'] = FIREBASE_STORAGE_BUCKET
+    else:
+        # Odatiy nom: <project-id>.firebasestorage.app
+        import json as _json
+        with open(key_path, encoding='utf-8') as handle:
+            project_id = _json.load(handle).get('project_id', '')
+        options['storageBucket'] = f"{project_id}.firebasestorage.app"
+
+    firebase_admin.initialize_app(cred, options)
 
 db = firestore.client()
 bucket = storage.bucket()
@@ -470,9 +473,8 @@ def send_notification(user_id: int, title: str, body: str, type: str = 'system')
 
 # ─── Payment settings ─────────────────────────────────────────
 #
-# Karta ma'lumoti yagona joyda — settings/payment hujjatida. Bot ham,
-# mini app ham shu yerdan o'qiydi (F-07). config.py faqat birinchi
-# marta to'ldirish uchun boshlang'ich qiymat beradi.
+# Karta ma'lumoti yagona joyda — settings/payment hujjatida. Uni
+# /admin paneli to'ldiradi; bot va mini app faqat o'qiydi (F-07).
 
 def get_payment_settings() -> dict:
     try:
@@ -480,23 +482,12 @@ def get_payment_settings() -> dict:
         if snap.exists:
             data = snap.to_dict() or {}
             return {
-                "cardNumber": data.get("cardNumber") or CARD_NUMBER,
-                "cardOwner": data.get("cardOwner") or CARD_OWNER,
+                "cardNumber": data.get("cardNumber") or "",
+                "cardOwner": data.get("cardOwner") or "",
             }
     except Exception as e:
         print(f"[ERR] get_payment_settings: {e}")
-    return {"cardNumber": CARD_NUMBER, "cardOwner": CARD_OWNER}
-
-
-def ensure_payment_settings():
-    """Hujjat yo'q bo'lsa config.py qiymatlari bilan yaratadi."""
-    try:
-        ref = db.collection("settings").document("payment")
-        if not ref.get().exists:
-            ref.set({"cardNumber": CARD_NUMBER, "cardOwner": CARD_OWNER})
-            print("[OK] settings/payment yaratildi")
-    except Exception as e:
-        print(f"[ERR] ensure_payment_settings: {e}")
+    return {"cardNumber": "", "cardOwner": ""}
 
 
 def update_payment_settings(card_number: str, card_owner: str):

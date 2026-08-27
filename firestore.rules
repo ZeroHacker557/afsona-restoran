@@ -1,14 +1,19 @@
 rules_version = '2';
 
-// ShopOnline Firestore xavfsizlik qoidalari
+// Afsona Restaurant — Firestore xavfsizlik qoidalari
 //
 // Asosiy tamoyil: mijoz brauzeri hech qachon pul bilan bog'liq
 // ma'lumotni yoza olmaydi. Buyurtma, promokod va statuslar faqat
 // server tomonidan (Vercel serverless funksiyalari yoki bot'ning
 // service account'i orqali) yoziladi.
 //
-// Admin SDK (bot va /api/*) bu qoidalarni butunlay chetlab o'tadi —
-// shuning uchun ular uchun alohida ruxsat yozish shart emas.
+// Admin SDK (/api/*) bu qoidalarni butunlay chetlab o'tadi — shuning uchun
+// server uchun alohida ruxsat yozish shart emas.
+//
+// /admin paneli esa oddiy brauzer mijozi: u Firebase Auth (email+parol)
+// bilan kiradi va `admin: true` custom claim oladi. Claim'ni faqat server
+// (/api/admin, action=session) qo'yadi — ya'ni pastdagi isAdmin() tekshiruvi
+// ishonchli.
 //
 // Deploy:  firebase deploy --only firestore:rules
 // yoki Firebase Console → Firestore → Rules ga nusxalang.
@@ -26,22 +31,27 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == string(userId);
     }
 
+    // Boshqaruv paneli. Claim'ni server beradi, mijoz o'zi qo'ya olmaydi.
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
     // ── Katalog: hamma o'qiydi, hech kim yozmaydi ────────────
     match /products/{productId} {
       allow read: if true;
-      allow write: if false;   // faqat bot (Admin SDK)
+      allow write: if isAdmin();
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if false;   // faqat bot (Admin SDK)
+      allow write: if isAdmin();
     }
 
     // ── Profil: faqat o'zinikini ────────────────────────────
     // Foydalanuvchi ismi, telefoni va manzillarini o'zgartira oladi.
     // Boshqa maydonlarni (masalan rollarni) o'zgartira olmaydi.
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if false;  // /api/auth yaratadi
       allow update: if isOwner(userId)
                     && request.resource.data.diff(resource.data).affectedKeys()
@@ -53,8 +63,11 @@ service cloud.firestore {
     // Buyurtmani faqat /api/orders yaratadi (narx serverda hisoblanadi),
     // statusni faqat bot o'zgartiradi.
     match /orders/{orderId} {
-      allow read: if signedIn() && resource.data.userId == int(request.auth.uid);
-      allow write: if false;
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == int(request.auth.uid));
+      // Panel statusni /api/admin orqali o'zgartiradi (mijozga xabar ham
+      // o'sha yerda ketadi). Bu yerda faqat kichik tuzatishlarga ruxsat.
+      allow update: if isAdmin();
+      allow create, delete: if false;
     }
 
     // ── Sharhlar ────────────────────────────────────────────
@@ -64,14 +77,14 @@ service cloud.firestore {
     // yoza olmaydi (F-09, 9- va 10-bandlar).
     match /reviews/{reviewId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     // ── Bildirishnomalar ────────────────────────────────────
     // Faqat o'zinikini o'qiydi va faqat "read" bayrog'ini o'zgartira oladi.
     match /notifications/{notificationId} {
-      allow read: if signedIn() && resource.data.userId == int(request.auth.uid);
-      allow create, delete: if false;
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == int(request.auth.uid));
+      allow create, delete: if isAdmin();
       allow update: if signedIn()
                     && resource.data.userId == int(request.auth.uid)
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
@@ -80,18 +93,27 @@ service cloud.firestore {
     // ── Promokodlar: mijoz ko'ra olmaydi ────────────────────
     // Tekshirish /api/promo va /api/orders orqali.
     match /promocodes/{promoId} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
 
     // ── Sozlamalar: o'qish mumkin (karta raqami), yozish yo'q ──
+    // Ish vaqti va brend ma'lumotini mijoz kirmasdan ham o'qishi kerak
+    // (ilova ochilishi bilan "yopiq" holatini ko'rsatadi).
     match /settings/{docId} {
-      allow read: if signedIn();
-      allow write: if false;
+      allow read: if docId == 'hours' || docId == 'brand' || signedIn();
+      allow write: if isAdmin();
     }
 
     // ── Hisoblagichlar: faqat server ────────────────────────
     match /counters/{docId} {
-      allow read, write: if false;
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Analitika: panel o'qiydi, /api/track yozadi ─────────
+    match /analytics/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // Yuqorida sanalmagan hamma narsa yopiq

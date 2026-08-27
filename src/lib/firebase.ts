@@ -2,8 +2,17 @@ import { initializeApp } from 'firebase/app'
 import { initializeFirestore, collection, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { parseDate } from '../utils/date'
+import { DEFAULT_HOURS, readHours, type WorkingHours } from '../utils/hours'
 import type { Product, Category, Order, PaymentSettings, DeliverySettings, Notification, UserProfile } from '../types/domain'
 
+// ══════════════════════════════════════════════════════════════
+//  FIREBASE KONFIGURATSIYASI — YANGI LOYIHAGA O'TKAZISHDA SHU YER
+//
+//  Firebase Console → Project Settings → General → Your apps → Web app
+//  bo'limidagi qiymatlarni shu yerga ko'chiring. Bu qiymatlar maxfiy
+//  emas (ular brauzerga baribir tushadi) — himoya Firestore Rules va
+//  Firebase Auth orqali ta'minlanadi.
+// ══════════════════════════════════════════════════════════════
 const firebaseConfig = {
   apiKey: "AIzaSyCzvCSShxNSDPTGhSctnOuwtqpbOlOs3OQ",
   authDomain: "ecommercy-restoran.firebaseapp.com",
@@ -50,7 +59,9 @@ export function subscribeToProducts(callback: (products: Product[]) => void, onE
         color: data.color || '',
         description: data.description || '',
         discount: data.discount || '',
-        stock: typeof data.stock === 'number' ? data.stock : undefined
+        stock: typeof data.stock === 'number' ? data.stock : undefined,
+        // Stop-list: admin panelda o'chirilgan taom savatga tushmaydi
+        available: data.available !== false
       }
     })
     callback(products)
@@ -140,6 +151,43 @@ export async function getPaymentSettings(): Promise<PaymentSettings> {
     console.error("[Firebase] To'lov sozlamalarini o'qib bo'lmadi:", error)
     return PAYMENT_FALLBACK
   }
+}
+
+// ── ISH VAQTI VA BREND ───────────────────────────────────────
+
+/**
+ * Restoran ish vaqti. Hujjat mavjud bo'lmasa — tekshiruvsiz (doim ochiq)
+ * holat qaytadi, ya'ni sozlanmagan baza buyurtmani to'smaydi.
+ */
+export function subscribeToHours(callback: (hours: WorkingHours) => void) {
+  return onSnapshot(
+    doc(db, 'settings', 'hours'),
+    (snap) => callback(snap.exists() ? readHours(snap.data()) : DEFAULT_HOURS),
+    (error) => {
+      console.warn('[Firebase] Ish vaqtini o‘qib bo‘lmadi:', error)
+      callback(DEFAULT_HOURS)
+    },
+  )
+}
+
+export type BrandInfo = {
+  name: string
+  phone: string
+  telegram: string
+  email: string
+  address: string
+}
+
+/** Aloqa ma'lumotlari — admin panelda o'zgartiriladi. */
+export function subscribeToBrand(callback: (brand: Partial<BrandInfo>) => void) {
+  return onSnapshot(
+    doc(db, 'settings', 'brand'),
+    (snap) => callback(snap.exists() ? (snap.data() as Partial<BrandInfo>) : {}),
+    (error) => {
+      console.warn('[Firebase] Brend ma‘lumotini o‘qib bo‘lmadi:', error)
+      callback({})
+    },
+  )
 }
 
 // Foydalanuvchi hujjatini /api/auth yaratadi va yangilaydi.

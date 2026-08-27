@@ -1,10 +1,11 @@
 rules_version = '2';
 
-// Abubakr Food — Firebase Storage xavfsizlik qoidalari
+// Afsona Restaurant — Firebase Storage xavfsizlik qoidalari
 //
 // Taom rasmlari hamma uchun ochiq bo'lishi kerak (mijoz brauzeri ularni
-// <img> orqali, imzosiz ochadi). Yozishni faqat bot (Admin SDK) bajaradi —
-// Admin SDK bu qoidalarni butunlay chetlab o'tadi.
+// <img> orqali, imzosiz ochadi). Yozishni /admin paneli bajaradi: u
+// `admin: true` custom claim bilan kiradi va rasmni to'g'ridan-to'g'ri
+// Storage'ga yuklaydi (Vercel funksiyasidagi 4.5 MB chegarasi chetlanadi).
 //
 // Deploy:  firebase deploy --only storage
 // yoki Firebase Console → Storage → Rules ga nusxalang.
@@ -13,9 +14,30 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // Taom rasmlari: hamma o'qiydi, hech kim (client) yozmaydi
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
     match /products/{allPaths=**} {
       allow read: if true;
-      allow write: if false;
+      // 8 MB gacha va faqat rasm — noto'g'ri fayl ko'tarilmaydi
+      allow write: if isAdmin()
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Xabarnoma uchun rasm/video (Telegram shu havoladan yuklab oladi)
+    match /broadcast/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 45 * 1024 * 1024;
+    }
+
+    // Mijoz yuborgan to'lov cheklari
+    match /receipts/{allPaths=**} {
+      allow read: if isAdmin();
+      allow write: if request.auth != null
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
     }
 
     // Qolgan hamma narsa yopiq

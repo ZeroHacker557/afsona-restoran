@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  Clock,
   ArrowLeft, Banknote, Check, Copy, CreditCard, Loader2, MapPin,
   MessageSquare, Phone, Send, ShoppingBag, Tag, User,
 } from 'lucide-react'
@@ -24,13 +25,15 @@ type Props = {
   orderForm: OrderForm
   onUpdateForm: (field: keyof OrderForm, value: unknown) => void
   onSubmit: () => Promise<boolean>
+  /** Restoran yopiq bo'lsa sahifa tepasida ogohlantirish chiqadi. */
+  closed?: boolean
   isSubmitting: boolean
   onBack: () => void
   onNavigate: (page: AppPage) => void
 }
 
 export function CheckoutPage({
-  profile, cartProducts, cartTotal, orderForm, onUpdateForm, onSubmit, isSubmitting, onBack, onNavigate,
+  profile, cartProducts, cartTotal, orderForm, onUpdateForm, onSubmit, isSubmitting, onBack, onNavigate, closed,
 }: Props) {
   const t = useT()
   const [copied, setCopied] = useState(false)
@@ -116,6 +119,16 @@ export function CheckoutPage({
       </header>
 
       <div className="px-5 pb-32 pt-6 sm:px-10 page-animate">
+        {closed && (
+          <div
+            className="mb-4 flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold"
+            style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}
+          >
+            <Clock size={17} />
+            {t('closed.banner')}
+          </div>
+        )}
+
         {/* Buyurtma tarkibi */}
         <section className="rounded-2xl border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
           <h3 className="flex items-center gap-2 font-bold" style={{ color: 'var(--ink)' }}>

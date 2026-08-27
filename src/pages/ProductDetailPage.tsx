@@ -38,7 +38,8 @@ export function ProductDetailPage({
   const favourite = likedIds.includes(product.id)
   const images = product.images || []
   const stock = product.stock
-  const soldOut = stock === 0
+  // Qoldiq tugagan yoki admin stop-listga qo'ygan
+  const soldOut = stock === 0 || product.available === false
   const lowStock = typeof stock === 'number' && stock > 0 && stock <= 5
   const maxCount = typeof stock === 'number' && stock > 0 ? Math.min(stock, 99) : 99
 

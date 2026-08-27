@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { subscribeToCategories, subscribeToProducts, subscribeToUserOrders, subscribeToUserProfile, subscribeToUserNotifications, markNotificationsAsRead } from '../lib/firebase'
+import { subscribeToCategories, subscribeToProducts, subscribeToUserOrders, subscribeToUserProfile, subscribeToUserNotifications, markNotificationsAsRead, subscribeToHours } from '../lib/firebase'
 import { ensureSignedIn, onAuthChanged, auth } from '../lib/auth'
 import { apiPost, ApiError } from '../lib/api'
 import { track } from '../lib/track'
@@ -7,6 +7,7 @@ import { searchProducts } from '../utils/search'
 import type { AppPage, Category, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
 import { hapticError, hapticFeedback, hapticSuccess, initTelegram } from '../utils/telegram'
 import { applyTheme, getStoredTheme, storeTheme, type ThemeMode } from '../utils/theme'
+import { DEFAULT_HOURS, getOpenState, type OpenState, type WorkingHours } from '../utils/hours'
 import { useT } from '../i18n'
 
 /** Pastki menyudagi asosiy sahifalar — ularga o'tganda tarix tozalanadi. */
@@ -76,6 +77,10 @@ export function useShopStore() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0)
+  // Restoran ish vaqti. Savatga qo'shish har doim ishlaydi — tekshiruv
+  // faqat buyurtma berishda (shunda savat yo'qolmaydi).
+  const [hours, setHours] = useState<WorkingHours>(DEFAULT_HOURS)
+  const [closedNotice, setClosedNotice] = useState<OpenState | null>(null)
 
   // Ochiq ma'lumot: katalog. Auth kutilmaydi — Rules'da o'qish ochiq.
   useEffect(() => {
@@ -94,9 +99,12 @@ export function useShopStore() {
       () => {},
     )
 
+    const unsubHours = subscribeToHours(setHours)
+
     return () => {
       unsubProds()
       unsubCats()
+      unsubHours()
     }
   }, [])
 
@@ -281,6 +289,11 @@ export function useShopStore() {
   }, [])
 
   const addToCart = useCallback((product: Product, size?: string, color?: string) => {
+    if (product.available === false) {
+      notify(t('product.soldOutLong'))
+      hapticError()
+      return
+    }
     const s = size || product.sizes?.[0] || 'nosize'
     const c = color || product.color || 'nocolor'
     const key = `${product.id}_${s}_${c}`
@@ -342,6 +355,15 @@ export function useShopStore() {
       return false
     }
 
+    // Restoran yopiq bo'lsa buyurtma yuborilmaydi, lekin savat saqlanadi:
+    // mijoz ochilish vaqtini ko'radi va keyin qaytadan bosadi.
+    const state = getOpenState(hours)
+    if (!state.open) {
+      setClosedNotice(state)
+      hapticError()
+      return false
+    }
+
     if (!orderKeyRef.current) orderKeyRef.current = newOrderKey()
 
     setSubmitting(true)
@@ -368,6 +390,14 @@ export function useShopStore() {
       // Buyurtma yaratilmadi — savat SAQLANIB qoladi (F-05)
       console.error('[Buyurtma] yuborilmadi:', error)
       hapticError()
+
+      // Server "restoran yopiq" desa (mijoz sahifasi eskirgan bo'lishi
+      // mumkin) — quruq xato o'rniga ish vaqti oynasini ko'rsatamiz
+      if (error instanceof ApiError && error.status === 409) {
+        setClosedNotice(getOpenState(hours))
+        return false
+      }
+
       notify(error instanceof ApiError ? error.message : t('checkout.failed'))
       return false
     } finally {
@@ -383,7 +413,7 @@ export function useShopStore() {
     setTimeout(() => setCheckoutDone(false), 4000)
 
     return true
-  }, [isSubmitting, orderForm, cartProducts, notify, t])
+  }, [isSubmitting, orderForm, cartProducts, notify, t, hours])
 
   return {
     page, history, canGoBack: history.length > 0 || isCartOpen || isSearchOpen,
@@ -393,6 +423,8 @@ export function useShopStore() {
     isSearchOpen, isCartOpen, query, searchResults, toast,
     myOrders, checkoutDone, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
     notifications, unreadNotificationsCount,
+    hours, openState: getOpenState(hours),
+    closedNotice, dismissClosedNotice: () => setClosedNotice(null),
     catalogCategory, openCategory,
     theme, setTheme, toggleTheme,
     navigate, goBack, openProduct, toggleLike,

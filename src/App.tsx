@@ -4,6 +4,7 @@ import { SearchOverlay } from './components/layout/SearchOverlay'
 import { CartDrawer } from './components/cart/CartDrawer'
 import { Toast } from './components/ui/Toast'
 import { CheckoutSuccess } from './components/ui/CheckoutSuccess'
+import { ClosedNotice } from './components/ui/ClosedNotice'
 import { useShopStore } from './hooks/use-shop-store'
 import { CatalogPage } from './pages/CatalogPage'
 import { CheckoutPage } from './pages/CheckoutPage'
@@ -95,6 +96,14 @@ function App() {
 
         {shop.toast && <Toast message={shop.toast} onClose={shop.clearToast} />}
         {shop.checkoutDone && <CheckoutSuccess onViewOrders={() => shop.navigate('orders')} />}
+
+        {shop.closedNotice && (
+          <ClosedNotice
+            state={shop.closedNotice}
+            hours={shop.hours}
+            onClose={shop.dismissClosedNotice}
+          />
+        )}
 
         <div className="page-wrapper">
           {shop.page === 'home' && (
@@ -192,6 +201,7 @@ function App() {
               orderForm={shop.orderForm}
               onUpdateForm={shop.updateOrderForm}
               onSubmit={shop.submitOrder}
+              closed={!shop.openState.open}
               isSubmitting={shop.isSubmitting}
               onBack={shop.goBack}
               onNavigate={shop.navigate}

@@ -1,0 +1,200 @@
+import { useState, type FormEvent } from 'react'
+import { Eye, EyeOff, KeyRound, LogIn, UtensilsCrossed } from 'lucide-react'
+import { signIn } from '../lib/auth'
+import { BRAND } from '../../config/brand'
+import { Field, Spinner } from '../components/ui'
+
+/**
+ * Panelga kirish oynasi.
+ *
+ * Pastda "birinchi sozlash" bo'limi bor: hali bironta admin yaratilmagan
+ * bo'lsa (yoki parol yo'qolgan bo'lsa), Vercel'dagi ADMIN_SETUP_KEY kaliti
+ * bilan hisob yaratiladi.
+ */
+export function LoginPage({ onDone }: { onDone: () => void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [visible, setVisible] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [setupOpen, setSetupOpen] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await signIn(email, password)
+      onDone()
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'Kirishda xato')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <main className="grid min-h-[100dvh] place-items-center px-5" style={{ background: 'var(--bg)' }}>
+      <div className="w-full max-w-[380px]">
+        <div className="adm-card" style={{ padding: 26 }}>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <span className="adm-logo-mark" style={{ height: 52, width: 52, borderRadius: 16 }}>
+              <UtensilsCrossed size={26} />
+            </span>
+            <div>
+              <h1 className="text-xl font-extrabold tracking-tight">
+                {BRAND.name}
+                <span style={{ color: 'var(--brand)' }}> {BRAND.nameSuffix}</span>
+              </h1>
+              <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
+                Boshqaruv paneli
+              </p>
+            </div>
+          </div>
+
+          <form className="mt-6 flex flex-col gap-4" onSubmit={submit}>
+            <Field label="Email">
+              <input
+                className="adm-input"
+                type="email"
+                value={email}
+                autoComplete="username"
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="admin@afsona.uz"
+                required
+              />
+            </Field>
+
+            <Field label="Parol">
+              <div className="relative">
+                <input
+                  className="adm-input pr-11"
+                  type={visible ? 'text' : 'password'}
+                  value={password}
+                  autoComplete="current-password"
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="adm-icon-btn absolute right-1 top-1/2 -translate-y-1/2"
+                  onClick={() => setVisible((value) => !value)}
+                  aria-label="Parolni ko'rsatish"
+                >
+                  {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </Field>
+
+            {error && (
+              <p
+                className="rounded-[10px] px-3 py-2 text-sm font-semibold"
+                style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}
+              >
+                {error}
+              </p>
+            )}
+
+            <button className="adm-btn primary w-full py-3" disabled={busy}>
+              {busy ? <Spinner /> : <LogIn size={17} />}
+              Kirish
+            </button>
+          </form>
+        </div>
+
+        <button
+          className="adm-btn ghost mx-auto mt-3 text-xs"
+          onClick={() => setSetupOpen((value) => !value)}
+        >
+          <KeyRound size={14} />
+          Birinchi sozlash / parolni tiklash
+        </button>
+
+        {setupOpen && <SetupForm />}
+      </div>
+    </main>
+  )
+}
+
+/** ADMIN_SETUP_KEY bilan birinchi admin hisobini yaratish. */
+function SetupForm() {
+  const [key, setKey] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [state, setState] = useState<{ busy: boolean; message: string; ok: boolean }>({
+    busy: false,
+    message: '',
+    ok: false,
+  })
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setState({ busy: true, message: '', ok: false })
+    try {
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'seed', key, email, password }),
+      })
+      const data = (await response.json().catch(() => null)) as { error?: string } | null
+      if (!response.ok) throw new Error(data?.error || `Xato ${response.status}`)
+      setState({ busy: false, ok: true, message: 'Tayyor! Endi shu email va parol bilan kiring.' })
+    } catch (problem) {
+      setState({
+        busy: false,
+        ok: false,
+        message: problem instanceof Error ? problem.message : 'Xato',
+      })
+    }
+  }
+
+  return (
+    <form className="adm-card mt-3 flex flex-col gap-3 p-4" onSubmit={submit}>
+      <p className="text-xs" style={{ color: 'var(--muted)' }}>
+        Vercel → Settings → Environment Variables da qo'yilgan <b>ADMIN_SETUP_KEY</b> ni kiriting.
+        Shu kalit bilan admin hisobi yaratiladi yoki paroli yangilanadi.
+      </p>
+
+      <input
+        className="adm-input"
+        placeholder="ADMIN_SETUP_KEY"
+        value={key}
+        onChange={(event) => setKey(event.target.value)}
+        required
+      />
+      <input
+        className="adm-input"
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        required
+      />
+      <input
+        className="adm-input"
+        type="password"
+        placeholder="Yangi parol (kamida 8 belgi)"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        minLength={8}
+        required
+      />
+
+      {state.message && (
+        <p
+          className="rounded-[10px] px-3 py-2 text-sm font-semibold"
+          style={{
+            background: state.ok ? 'var(--success-soft)' : 'var(--danger-soft)',
+            color: state.ok ? 'var(--success)' : 'var(--danger)',
+          }}
+        >
+          {state.message}
+        </p>
+      )}
+
+      <button className="adm-btn primary" disabled={state.busy}>
+        {state.busy ? <Spinner /> : 'Hisobni yaratish'}
+      </button>
+    </form>
+  )
+}

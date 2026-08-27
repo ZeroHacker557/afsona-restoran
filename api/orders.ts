@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
+import { getOpenState, readHours } from './_lib/hours.js'
+import { notifyAdminsNewOrder } from './_lib/order-notify.js'
 
 const ORDER_NUMBER_START = 1000
 
@@ -106,6 +108,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const db = await adminDb()
   const userId = Number(uid)
 
+  // ── Restoran ochiqmi ───────────────────────────────────────
+  // Mijoz oynasida ham tekshiriladi, lekin oxirgi so'z serverniki:
+  // eski sahifa ochiq qolgan bo'lsa ham yopiq restoranga buyurtma
+  // tushmaydi.
+  try {
+    const hoursSnap = await db.collection('settings').doc('hours').get()
+    const state = getOpenState(readHours(hoursSnap.data()))
+    if (!state.open) {
+      return res.status(409).json({
+        error: 'RESTAURANT_CLOSED',
+        closed: true,
+        reason: state.reason,
+        opensAt: state.opensAt,
+        opensInDays: state.opensInDays,
+        todayText: state.todayText,
+      })
+    }
+  } catch (error) {
+    // Sozlamani o'qib bo'lmasa — buyurtmani to'smaymiz
+    console.error('[orders] ish vaqtini tekshirib bo‘lmadi:', error)
+  }
+
   try {
     const result = await db.runTransaction(async (tx) => {
       // ── 1. O'qishlar (transaction'da hamma o'qish yozishdan oldin) ──
@@ -147,6 +171,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let promoRef: FirebaseFirestore.DocumentReference | null = null
       let promoData: FirebaseFirestore.DocumentData | null = null
+      // "Faqat birinchi buyurtma uchun" promokodlar shu bayroqqa qaraydi
+      let firstOrderChecked = true
       if (order.promoCode) {
         const promoQuery = await tx.get(
           db.collection('promocodes').where('code', '==', order.promoCode).limit(1),
@@ -154,6 +180,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (promoQuery.empty) throw new Error('PROMO_NOT_FOUND')
         promoRef = promoQuery.docs[0].ref
         promoData = promoQuery.docs[0].data()
+
+        if (promoData.firstOrderOnly === true) {
+          const previous = await tx.get(
+            db.collection('orders').where('userId', '==', userId).limit(1),
+          )
+          firstOrderChecked = previous.empty
+        }
       }
 
       // ── 2. Narx va ombor qoldig'ini tekshirish ─────────────
@@ -175,6 +208,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const price = Number(data.price)
         if (!Number.isFinite(price) || price <= 0) throw new Error('PRODUCT_PRICE')
+
+        // Stop-list: admin taomni vaqtincha o'chirib qo'ygan
+        if (data.available === false) throw new Error('PRODUCT_UNAVAILABLE')
 
         const key = String(item.productId)
         if (!seenProducts.has(key) && typeof data.stock === 'number') {
@@ -202,6 +238,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const subtotal = products.reduce((sum, p) => sum + p.product.price * p.quantity, 0)
 
+      // Minimal buyurtma summasi (settings/delivery.minOrder)
+      const minOrder = Math.max(Number(deliverySnap.data()?.minOrder) || 0, 0)
+      if (minOrder > 0 && subtotal < minOrder) throw new Error(`MIN_ORDER:${minOrder}`)
+
       // ── 3. Promokod ────────────────────────────────────────
       let discountPercent = 0
       let appliedPromo: string | null = null
@@ -223,6 +263,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const minOrderTotal = Number(promoData.minOrderTotal) || 0
         if (subtotal < minOrderTotal) throw new Error('PROMO_MIN_TOTAL')
+
+        // Faqat birinchi buyurtma uchun mo'ljallangan promokod
+        if (promoData.firstOrderOnly === true && !firstOrderChecked) {
+          throw new Error('PROMO_FIRST_ONLY')
+        }
 
         discountPercent = Math.min(Math.max(Number(promoData.discountPercent) || 0, 0), 100)
         appliedPromo = String(promoData.code || order.promoCode)
@@ -290,6 +335,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     })
 
+    // ── Adminlarga xabar ───────────────────────────────────────
+    // Ilgari buni bot (shaxsiy kompyuterda) qilardi; endi shu yerda
+    // yuboriladi — kompyuter yoqiq turishi shart emas.
+    if (!result.duplicate) {
+      try {
+        const snap = await db.collection('orders').doc(result.id).get()
+        const sent = await notifyAdminsNewOrder({ ...snap.data(), id: snap.id })
+        if (sent > 0) await snap.ref.update({ notified: true })
+      } catch (error) {
+        // Xabar ketmasa ham buyurtma yaratilgan — mijozga muvaffaqiyat
+        console.error('[orders] admin xabarnomasi:', error)
+      }
+    }
+
     return res.status(200).json(result)
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
@@ -304,8 +363,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       PROMO_MIN_TOTAL: 'Bu promokod uchun buyurtma summasi yetarli emas',
       OUT_OF_STOCK: 'Savatdagi mahsulotlardan biri sotuvda qolmadi',
       NOT_ENOUGH_STOCK: 'Omborda yetarli miqdor yo‘q, savatdagi sonni kamaytiring',
+      PRODUCT_UNAVAILABLE: 'Savatdagi taomlardan biri hozircha mavjud emas',
+      PROMO_FIRST_ONLY: 'Bu promokod faqat birinchi buyurtma uchun',
     }
     if (messages[code]) return fail(res, 400, messages[code])
+
+    if (code.startsWith('MIN_ORDER:')) {
+      const amount = Number(code.split(':')[1]) || 0
+      return fail(res, 400, `Minimal buyurtma summasi — ${amount.toLocaleString('ru-RU')} so'm`)
+    }
 
     console.error('[orders] xato:', error)
     return fail(res, 500, "Buyurtma yaratilmadi, qayta urinib ko'ring")

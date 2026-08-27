@@ -178,6 +178,9 @@ export const uz = {
   'orders.paid': "To'landi",
   'orders.sendReceipt': "To'lov chekini yuborish",
   'orders.resendReceipt': 'Qayta chek yuborish',
+  'orders.receiptSending': 'Chek yuborilmoqda...',
+  'orders.receiptSent': "Chek yuborildi — admin tez orada tasdiqlaydi",
+  'orders.receiptFailed': 'Chek yuborilmadi, qayta urinib ko‘ring',
   'orders.tabAll': 'Barchasi',
   'orders.tabNew': 'Yangi',
   'orders.tabAccepted': 'Qabul qilindi',
@@ -263,6 +266,20 @@ export const uz = {
   'gate.text':
     "Restoran Telegram ilovasi ichida ishlaydi. Buyurtma berish uchun botni oching va «Menyuni ochish» tugmasini bosing.",
   'gate.button': "Telegram'da ochish",
+
+  // ── Restoran yopiq ──
+  'closed.title': 'Restoran hozir yopiq',
+  'closed.temporarily': 'Hozircha buyurtma qabul qilinmayapti.',
+  'closed.dayOff': 'Bugun dam olish kuni.',
+  'closed.beforeOpen': "Biz hali ochilmadik.",
+  'closed.afterClose': 'Bugungi ish vaqti tugadi.',
+  'closed.opensToday': 'Bugun soat {time} da ochamiz — o‘shanda urinib ko‘ring.',
+  'closed.opensTomorrow': 'Ertaga soat {time} da ochamiz.',
+  'closed.opensLater': '{day} kuni soat {time} da ochamiz.',
+  'closed.todayHours': 'Bugungi ish vaqti: {hours}',
+  'closed.cartKept': 'Savatingiz saqlanib qoladi — yopilmaydi.',
+  'closed.ok': 'Tushunarli',
+  'closed.banner': 'Restoran hozir yopiq — buyurtma keyinroq qabul qilinadi',
 } as const
 
 export type TranslationKey = keyof typeof uz

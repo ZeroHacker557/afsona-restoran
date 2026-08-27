@@ -1,16 +1,14 @@
-import { useMemo, useState } from 'react'
-import { ChevronDown, ExternalLink, Loader2, ShoppingBag, SlidersHorizontal, X } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { ChevronDown, Camera, Loader2, ShoppingBag, SlidersHorizontal, X } from 'lucide-react'
 import { formatPrice } from '../data'
-import { getImageUrl, openBotDeepLink } from '../utils/telegram'
+import { getImageUrl } from '../utils/telegram'
 import { formatOrderDate } from '../utils/date'
 import { apiPost, ApiError } from '../lib/api'
+import { sendReceipt } from '../lib/receipt'
 import { hapticSuccess, hapticError } from '../utils/telegram'
 import { PageHeader } from '../components/layout/PageHeader'
 import { useT, type TranslationKey } from '../i18n'
 import type { Order, OrderStatus } from '../types/domain'
-
-const BOT_USERNAME = 'abubakrfood_bot'
-
 const TABS: { id: string; labelKey: TranslationKey }[] = [
   { id: 'all', labelKey: 'orders.tabAll' },
   { id: 'new', labelKey: 'orders.tabNew' },
@@ -48,6 +46,34 @@ export function OrdersPage({
   const [newest, setNewest] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  // Chek yuklash: bitta yashirin <input> hammasiga xizmat qiladi
+  const receiptInput = useRef<HTMLInputElement>(null)
+  const receiptOrderId = useRef<string | null>(null)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
+
+  const pickReceipt = (orderId: string) => {
+    receiptOrderId.current = orderId
+    receiptInput.current?.click()
+  }
+
+  const handleReceipt = async (file: File | undefined) => {
+    const orderId = receiptOrderId.current
+    if (!file || !orderId) return
+
+    setUploadingId(orderId)
+    try {
+      await sendReceipt(orderId, file)
+      hapticSuccess()
+      onNotify(t('orders.receiptSent'))
+    } catch (error) {
+      hapticError()
+      onNotify(error instanceof ApiError || error instanceof Error ? error.message : t('orders.receiptFailed'))
+    } finally {
+      setUploadingId(null)
+      receiptOrderId.current = null
+      if (receiptInput.current) receiptInput.current.value = ''
+    }
+  }
 
   const handleCancel = async (orderId: string) => {
     if (cancellingId) return
@@ -221,16 +247,20 @@ export function OrdersPage({
 
               {payInfo?.needsAction && (
                 <button
-                  onClick={() => openBotDeepLink(BOT_USERNAME, `receipt_${order.id}`)}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition active:scale-95"
+                  onClick={() => pickReceipt(order.id)}
+                  disabled={uploadingId === order.id}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition active:scale-95 disabled:opacity-60"
                   style={{
                     background: payInfo.bg,
                     color: payInfo.color,
                     border: `1px solid ${payInfo.color}`,
                   }}
                 >
-                  <ExternalLink size={15} />
-                  {payInfo.rejected ? t('orders.resendReceipt') : t('orders.sendReceipt')}
+                  {uploadingId === order.id ? (
+                    <><Loader2 size={15} className="animate-spin" />{t('orders.receiptSending')}</>
+                  ) : (
+                    <><Camera size={15} />{payInfo.rejected ? t('orders.resendReceipt') : t('orders.sendReceipt')}</>
+                  )}
                 </button>
               )}
             </div>
@@ -283,6 +313,13 @@ export function OrdersPage({
             )}
           </div>
         )}
+        <input
+          ref={receiptInput}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(event) => handleReceipt(event.target.files?.[0])}
+        />
       </section>
     </>
   )

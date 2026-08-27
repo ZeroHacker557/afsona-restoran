@@ -12,6 +12,7 @@ import { categoryIcon } from '../utils/category-icons'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { useT, type TranslationKey } from '../i18n'
 import type { AppPage, Category, Product, ProductActions } from '../types/domain'
+import { BRAND } from '../config/brand'
 
 const benefits: [LucideIcon, TranslationKey, TranslationKey][] = [
   [Truck, 'benefit.delivery', 'benefit.deliverySub'],
@@ -52,7 +53,7 @@ export function HomePage({
             <UtensilsCrossed />
           </span>
           <b className="text-2xl tracking-tight sm:text-3xl" style={{ color: 'var(--ink)' }}>
-            Abubakr<span style={{ color: 'var(--brand)' }}> Food</span>
+            {BRAND.name}<span style={{ color: 'var(--brand)' }}> {BRAND.nameSuffix}</span>
           </b>
         </div>
         <div className="flex items-center gap-1">
@@ -128,7 +129,7 @@ export function HomePage({
         <section className="mt-6">
           <div ref={categoryStripRef} className="category-strip scrollbar-none">
             {categories.map((category) => {
-              const Icon = categoryIcon(category.icon, category.name)
+              const Icon = categoryIcon(category.icon)
               return (
                 <button
                   onClick={() => onOpenCategory(category.name)}

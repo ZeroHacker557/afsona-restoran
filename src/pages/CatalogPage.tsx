@@ -116,7 +116,7 @@ export function CatalogPage({
       {/* Kategoriyalar */}
       <section ref={categoryStripRef} className="category-strip scrollbar-none mt-6">
         {displayCategories.map((category) => {
-          const Icon = category.name === ALL ? Grid2X2 : categoryIcon(category.icon, category.name)
+          const Icon = category.name === ALL ? Grid2X2 : categoryIcon(category.icon)
           return (
             <button
               onClick={() => setActive(category.name)}

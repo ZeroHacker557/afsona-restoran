@@ -9,8 +9,10 @@ import {
   Clock,
   CheckCircle2,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useT } from '../i18n'
+import { subscribeToBrand, type BrandInfo } from '../lib/firebase'
+import { BRAND } from '../config/brand'
 
 type Props = {
   onBack: () => void
@@ -98,13 +100,22 @@ export function SupportPage({ onBack }: Props) {
   const lang = (localStorage.getItem('shopOnlineLang') ?? 'uz') as 'uz' | 'ru'
   const faqs = lang === 'ru' ? faqs_ru : faqs_uz
 
+  // Aloqa ma'lumotlari admin panelda o'zgartiriladi (settings/brand).
+  // Baza bo'sh bo'lsa — config/brand.ts dagi zaxira qiymatlar.
+  const [info, setInfo] = useState<Partial<BrandInfo>>({})
+  useEffect(() => subscribeToBrand(setInfo), [])
+
+  const phone = info.phone || BRAND.phone
+  const telegram = (info.telegram || BRAND.telegram).replace(/^@/, '')
+  const email = info.email || BRAND.email
+
   const contacts = [
     {
       id: 'phone',
       icon: Phone,
       label: lang === 'ru' ? 'Телефон' : 'Telefon',
-      value: '+998 97 400 98 77',
-      href: 'tel:+998974009877',
+      value: phone,
+      href: `tel:${phone.replace(/[^\d+]/g, '')}`,
       color: '#22c55e',
       bg: 'rgba(34,197,94,0.12)',
     },
@@ -112,17 +123,17 @@ export function SupportPage({ onBack }: Props) {
       id: 'telegram',
       icon: MessageCircle,
       label: 'Telegram',
-      value: '@for_name',
-      href: 'https://t.me/for_name',
+      value: `@${telegram}`,
+      href: `https://t.me/${telegram}`,
       color: '#0ea5e9',
       bg: 'rgba(14,165,233,0.12)',
     },
     {
       id: 'email',
       icon: Mail,
-      label: 'Gmail',
-      value: 'abubakrdeveloper@gmail.com',
-      href: 'mailto:abubakrdeveloper@gmail.com',
+      label: 'Email',
+      value: email,
+      href: `mailto:${email}`,
       color: 'var(--brand)',
       bg: 'var(--brand-soft)',
     },

@@ -19,6 +19,8 @@ export type Product = {
   sizes?: string[]
   /** Ombordagi qoldiq. undefined — hisob yuritilmaydi (eski mahsulotlar). */
   stock?: number
+  /** false — stop-list: taom vaqtincha sotuvda emas. */
+  available?: boolean
 }
 
 export type Category = {

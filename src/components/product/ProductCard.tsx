@@ -12,7 +12,8 @@ export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLi
   const favourite = likedIds.includes(product.id)
   const imgSrc = product.images?.[0] ? getImageUrl(product.images[0]) : ''
   const [imgError, setImgError] = useState(false)
-  const soldOut = product.stock === 0
+  // Qoldiq tugagan yoki admin stop-listga qo'ygan
+  const soldOut = product.stock === 0 || product.available === false
 
   return (
     <article className={'product-card group ' + (compact ? 'compact' : '')}>

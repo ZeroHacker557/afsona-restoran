@@ -1,121 +1,159 @@
-# Ishga tushirish qo'llanmasi
+# Ishga tushirish qo'llanmasi — Afsona Restaurant
 
-3-blokdagi xavfsizlik o'zgarishlaridan keyin loyiha uchta qismdan iborat:
+Loyiha uch qismdan iborat:
 
 | Qism | Qayerda ishlaydi | Vazifasi |
 |---|---|---|
-| Mini app | Vercel (statik) | Katalog, savat, buyurtma formasi |
-| `/api/*` | Vercel (serverless) | Telegram imzosini tekshirish, buyurtma yaratish, promokod |
-| Bot | Sizning kompyuteringiz | Admin panel, buyurtma xabarnomalari, to'lov cheklari |
+| Mini app (`/`) | Vercel (statik) | Mijoz: menyu, savat, buyurtma |
+| Admin panel (`/admin`) | Vercel (statik) | Boshqaruv: buyurtmalar, taomlar, sozlamalar |
+| `/api/*` | Vercel (serverless) | Buyurtma yaratish, Telegram xabarlari, admin amallari |
+| Bot (`bot/`) | Ixtiyoriy server yoki kompyuter | Faqat mijoz bilan muloqot: `/start`, menyu tugmasi |
+
+> **Muhim:** buyurtma xabarnomalari va mijozga ketadigan xabarlar Vercel
+> funksiyalaridan yuboriladi. Ya'ni bot dasturi o'chiq bo'lsa ham
+> buyurtmalar qabul qilinadi va adminga Telegram xabari boradi.
 
 ---
 
-## 1. Bot tokenini almashtiring — MAJBURIY
+## 1. Bot tokeni
 
-Token git tarixida ochiq turibdi. `initData` imzosi aynan shu token bilan
-tekshirilgani uchun, uni bilgan odam **istalgan foydalanuvchi nomidan
-haqiqiy imzo yasay oladi** va butun himoya ma'nosini yo'qotadi.
+[@BotFather](https://t.me/BotFather) → `/mybots` → botni tanlang → **API Token**.
+Eski loyihadan ko'chirilgan token ishlatilmasin — **Revoke current token**
+bosib yangisini oling.
 
-1. Telegram'da [@BotFather](https://t.me/BotFather) ni oching
-2. `/mybots` → botni tanlang → **API Token** → **Revoke current token**
-3. Yangi tokenni oling
-
-Yangi token ikki joyga kerak: `bot/config.py` va Vercel env o'zgaruvchisi.
+Token ikki joyga kerak: Vercel `BOT_TOKEN` va `.env` fayli.
 
 ---
 
-## 2. Vercel Environment Variables
+## 2. Firebase
 
-Vercel loyihasi → **Settings** → **Environment Variables**. Ikkalasini ham
-Production, Preview va Development uchun qo'shing.
+1. **Firestore Database** yarating (Production mode).
+2. **Storage** yoqing — taom rasmlari va cheklar shu yerda saqlanadi.
+3. **Authentication** → **Get started** → **Sign-in method** →
+   **Email/Password** ni **yoqing**. Admin panel shu bilan ishlaydi.
+4. **Project Settings** → **Service accounts** → **Generate new private key**.
+   Yuklab olingan JSON:
+   - Vercel'ga → `FIREBASE_SERVICE_ACCOUNT` (butun mazmuni, bitta qatorda)
+   - Bot uchun → loyiha ildiziga qo'ying (`.gitignore` da, git'ga tushmaydi)
+5. **Mijoz konfiguratsiyasi**: Project Settings → General → Your apps → Web app.
+   Undagi qiymatlarni [`src/lib/firebase.ts`](./src/lib/firebase.ts) dagi
+   `firebaseConfig` ga qo'ying.
 
-### `BOT_TOKEN`
-Yuqorida olingan yangi token.
+### Qoidalar (Rules)
 
-### `FIREBASE_SERVICE_ACCOUNT`
-Firebase Console → ⚙️ **Project Settings** → **Service accounts** →
-**Generate new private key**. Yuklab olingan JSON faylni matn muharririda
-oching va **butun mazmunini** (`{` dan `}` gacha) qiymat sifatida joylang.
+Ikkalasini ham nusxalang va **Publish** bosing:
 
-> Bu kalit loyihadagi `ecommercy-restoran-firebase-adminsdk-*.json` fayl bilan
-> bir xil. U `.gitignore` da — git'ga tushmaydi va tushmasligi kerak.
+- [`firestore.rules`](./firestore.rules) → Firestore Database → Rules
+- [`storage.rules`](./storage.rules) → Storage → Rules
 
-Env o'zgaruvchilarni qo'shgandan keyin **qaytadan deploy qiling** —
-Vercel ularni faqat yangi build'ga qo'llaydi.
-
----
-
-## 3. Firebase Authentication'ni yoqing
-
-Firebase Console → **Authentication** → **Get started**.
-
-Custom token bilan kirish uchun alohida provider yoqish shart emas, lekin
-Authentication bo'limi bir marta ishga tushirilgan bo'lishi kerak.
-
----
-
-## 4. Firestore Rules'ni yangilang
-
-Loyiha ildizidagi [`firestore.rules`](./firestore.rules) faylini oching va
-mazmunini Firebase Console → **Firestore Database** → **Rules** ga nusxalab,
-**Publish** bosing.
-
-Yoki Firebase CLI bilan:
+Yoki CLI bilan:
 
 ```bash
-firebase deploy --only firestore:rules
+firebase deploy --only firestore:rules,storage
 ```
 
-Qoidalar nima qiladi:
-
-- **products, categories** — hamma o'qiydi, hech kim yozmaydi (faqat bot)
-- **orders** — foydalanuvchi faqat o'zinikini o'qiydi, yozish butunlay yopiq
-  (buyurtmani `/api/orders` yaratadi)
-- **users** — faqat o'z hujjati, faqat `first_name`, `last_name`, `phone`,
-  `addresses` maydonlari
-- **promocodes** — mijoz umuman ko'ra olmaydi
-- **counters** — faqat server
-
-> ⚠️ Rules'ni yangilashdan **oldin** yangi kodni deploy qiling. Aks holda
-> eski mini app buyurtma yarata olmay qoladi (u to'g'ridan-to'g'ri yozardi).
+Qoidalarning mag'zi: mijoz katalogni o'qiydi va faqat o'z ma'lumotini
+o'zgartiradi; admin panel esa `admin: true` custom claim bilan yozadi.
+Claim'ni faqat server (`/api/admin`) qo'yadi.
 
 ---
 
-## 5. To'g'ri tartib
+## 3. Vercel Environment Variables
 
-```
-1. Yangi kodni Vercel'ga deploy qiling (env o'zgaruvchilar bilan)
-2. Mini appni ochib, buyurtma berib ko'ring — ishlashi kerak
-3. Shundan keyin Firestore Rules'ni yangilang
-4. Yana bir buyurtma berib tekshiring
-5. bot/config.py dagi tokenni yangilang va botni qayta ishga tushiring
-```
+Loyiha → **Settings** → **Environment Variables**. Hammasini
+Production, Preview va Development uchun qo'shing
+([`.env.example`](./.env.example) da izohlari bor):
+
+| O'zgaruvchi | Nima uchun |
+|---|---|
+| `BOT_TOKEN` | Telegram imzosini tekshirish va xabar yuborish |
+| `FIREBASE_SERVICE_ACCOUNT` | Serverdan Firestore'ga yozish |
+| `ADMIN_EMAILS` | Panelga kira oladigan egalar (vergul bilan) |
+| `ADMIN_SETUP_KEY` | Birinchi admin hisobini yaratish kaliti |
+| `MINI_APP_URL` | Xabarlardagi «Ilovani ochish» tugmasi |
+| `ADMIN_PANEL_URL` | Buyurtma xabaridagi «Panelda ochish» tugmasi |
+| `ADMIN_CHAT_IDS` | Buyurtma xabari keladigan Telegram ID'lar (zaxira) |
+
+Qo'shgandan keyin **qayta deploy qiling** — Vercel env'ni faqat yangi
+build'ga qo'llaydi.
 
 ---
 
-## 6. Tekshirish ro'yxati
+## 4. Birinchi adminni yaratish
 
-- [ ] Mini app Telegram'da ochiladi, katalog ko'rinadi
-- [ ] Brauzerda ochilsa "Telegram'da ochish" ekrani chiqadi
-- [ ] Buyurtma berilganda adminga xabar keladi, raqami `#1001` ko'rinishida
-- [ ] "Buyurtmalarim" bo'limida buyurtma ko'rinadi
-- [ ] Promokod qo'llanganda chegirma to'g'ri hisoblanadi
-- [ ] Bot o'chirilgan holda buyurtma berilsa, bot yoqilganda xabar keladi
-- [ ] Karta bilan to'lovda chek yuborish oqimi ishlaydi
+1. `https://sizning-domen.vercel.app/admin` ni oching
+2. Pastdagi **«Birinchi sozlash / parolni tiklash»** tugmasini bosing
+3. `ADMIN_SETUP_KEY`, email va yangi parolni kiriting
+4. Endi shu email va parol bilan kiring
+
+Keyingi adminlar panelning **Adminlar** bo'limidan qo'shiladi.
+Parol unutilsa — xuddi shu «Birinchi sozlash» oynasi orqali tiklanadi.
+
+---
+
+## 5. Panelni sozlash (birinchi kirishdan keyin)
+
+**Sozlamalar** bo'limida:
+
+- **Ish vaqti** — kunlar bo'yicha soatlar. Yopiq paytda mijoz savatga
+  taom qo'sha oladi, lekin «Buyurtma berish» bosilganda qachon
+  ochilishimiz yozilgan oyna chiqadi.
+- **Yetkazib berish** — narx, bepul yetkazish chegarasi, minimal summa
+- **Karta** — raqam va egasining ismi (karta orqali to'lov uchun)
+- **Restoran va aloqa** — telefon, Telegram, email, manzil.
+  Ilovadagi «Yordam» sahifasi shu yerdan o'qiydi.
+
+**Adminlar** bo'limida — o'z Telegram ID'ingizni qo'shing
+(ID'ni [@userinfobot](https://t.me/userinfobot) aytadi). Yangi buyurtma
+kelganda shu chatga xabar tushadi.
+
+Keyin **Kategoriyalar** → **Taomlar** ni to'ldiring.
+
+---
+
+## 6. Botni ishga tushirish
+
+Bot faqat mijoz bilan muloqot uchun kerak (`/start`, menyu tugmasi).
+
+```bash
+cd bot
+pip install -r requirements.txt
+python bot.py
+```
+
+`.env` fayli loyiha ildizida bo'lishi kerak (`.env.example` dan nusxa).
+Bot doimiy ishlashi uchun uni VPS yoki Railway'ga qo'ying — lekin
+o'chib qolsa ham buyurtmalar yo'qolmaydi.
+
+BotFather'da mini app tugmasini ham qo'ying:
+`/mybots` → bot → **Bot Settings** → **Menu Button** → mini app URL.
+
+---
+
+## 7. Tekshirish ro'yxati
+
+- [ ] `/admin` ochiladi, email+parol bilan kiriladi
+- [ ] Kategoriya va taom qo'shildi, mini appda darhol ko'rindi
+- [ ] Taomni «Stop-list» ga qo'yganda ilovada «Tugagan» bo'lib chiqadi
+- [ ] Ish vaqti tashqarisida buyurtma berishga urinilganda ish vaqti oynasi chiqadi
+- [ ] Buyurtma berilganda adminga Telegram xabari keldi (bot o'chiq bo'lsa ham)
+- [ ] Panelda status o'zgartirilganda mijozga Telegram xabari bordi
+- [ ] Karta bilan to'lovda chek ilovadan yuborildi va panelda ko'rindi
+- [ ] Promokod qo'llanganda chegirma to'g'ri hisoblandi
+- [ ] Xabarnoma (broadcast) yuborildi
 
 ### Xatolarni qayerdan ko'rish
 
-- **Mini app:** Telegram Desktop → mini app ustida o'ng tugma → Inspect
-- **API:** Vercel → loyiha → **Logs** (`[auth]`, `[orders]`, `[promo]` teglari)
+- **Mini app / panel:** brauzer konsoli (F12)
+- **API:** Vercel → loyiha → **Logs** (`[auth]`, `[orders]`, `[admin:...]` teglari)
 - **Bot:** terminal oynasidagi log
 
 ---
 
-## Ma'lum cheklovlar
+## Eslatmalar
 
-- **Bot shaxsiy kompyuterda ishlaydi** — kompyuter o'chsa, admin xabarnomalari
-  kechikadi. Buyurtmalar yo'qolmaydi (`notified` bayrog'i tufayli), lekin
-  admin ularni faqat bot yoqilganda ko'radi. Doimiy ishlashi kerak bo'lsa,
-  botni VPS yoki Railway'ga ko'chirish kerak.
-- **Bot tokeni hali ham `bot/config.py` da** — uni ham `.env` ga o'tkazish
-  tavsiya etiladi.
+- Panelga kirish huquqi ikki qavatli: Firebase Auth paroli **va**
+  `settings/admins` hujjatidagi email ro'yxati. Adminni panelidan
+  o'chirsangiz, uning tokeni darhol bekor qilinadi.
+- `ADMIN_SETUP_KEY` — panelga kirishning zaxira yo'li. Uni maxfiy saqlang.
+- Xabarnoma katta ro'yxatga paketlab yuboriladi; sahifani yopmang.

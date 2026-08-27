@@ -175,6 +175,9 @@ export const ru: Record<TranslationKey, string> = {
   'orders.paid': 'Оплачено',
   'orders.sendReceipt': 'Отправить чек',
   'orders.resendReceipt': 'Отправить чек заново',
+  'orders.receiptSending': 'Чек отправляется...',
+  'orders.receiptSent': 'Чек отправлен — администратор скоро подтвердит',
+  'orders.receiptFailed': 'Не удалось отправить чек, попробуйте ещё раз',
   'orders.tabAll': 'Все',
   'orders.tabNew': 'Новые',
   'orders.tabAccepted': 'Принятые',
@@ -260,4 +263,18 @@ export const ru: Record<TranslationKey, string> = {
   'gate.text':
     'Ресторан работает внутри Telegram. Откройте бота и нажмите «Открыть меню».',
   'gate.button': 'Открыть в Telegram',
+
+  // ── Ресторан закрыт ──
+  'closed.title': 'Ресторан сейчас закрыт',
+  'closed.temporarily': 'Приём заказов временно приостановлен.',
+  'closed.dayOff': 'Сегодня выходной.',
+  'closed.beforeOpen': 'Мы ещё не открылись.',
+  'closed.afterClose': 'Рабочий день завершён.',
+  'closed.opensToday': 'Откроемся сегодня в {time} — попробуйте тогда.',
+  'closed.opensTomorrow': 'Откроемся завтра в {time}.',
+  'closed.opensLater': 'Откроемся в {day} в {time}.',
+  'closed.todayHours': 'Часы работы сегодня: {hours}',
+  'closed.cartKept': 'Корзина сохранится — ничего не пропадёт.',
+  'closed.ok': 'Понятно',
+  'closed.banner': 'Ресторан закрыт — заказ можно оформить позже',
 }
