@@ -42,6 +42,7 @@ async function call(method: string, payload: Record<string, unknown>): Promise<S
 
 export type Button = {
   text: string
+  /** `callback` berilgan tugmada ishlatilmaydi. */
   url: string
   /**
    * true — tugma mini app'ni TELEGRAM ICHIDA ochadi (web_app).
@@ -51,15 +52,24 @@ export type Button = {
    * Guruhga yuboriladigan xabarlarda oddiy havolani ishlating.
    */
   miniApp?: boolean
+  /**
+   * Tugma bosilganda botga yuboriladigan ma'lumot (callback_data).
+   * DIQQAT: bunday tugmani kimdir bosganda unga javob beradigan dastur
+   * (bot/bot.py) ishlab turishi shart — Vercel funksiyasi callback'ni
+   * eshitmaydi. Shuning uchun `url`/`miniApp` bo'lsa, o'sha afzal.
+   */
+  callback?: string
 }
 
 function markup(buttons?: Button[]) {
   if (!buttons?.length) return undefined
   return {
     inline_keyboard: buttons.map((button) => [
-      button.miniApp
-        ? { text: button.text, web_app: { url: button.url } }
-        : { text: button.text, url: button.url },
+      button.callback
+        ? { text: button.text, callback_data: button.callback }
+        : button.miniApp
+          ? { text: button.text, web_app: { url: button.url } }
+          : { text: button.text, url: button.url },
     ]),
   }
 }
@@ -102,6 +112,15 @@ export function sendAny(
   if (opts.videoUrl) return sendVideo(chatId, opts.videoUrl, opts.text, opts.buttons)
   if (opts.photoUrl) return sendPhoto(chatId, opts.photoUrl, opts.text, opts.buttons)
   return sendMessage(chatId, opts.text, opts.buttons)
+}
+
+/**
+ * Xaritadagi nuqtani Telegram lokatsiyasi ko'rinishida yuboradi — ya'ni
+ * odam qo'lda "Location" tashlagandagi kabi. Kuryer uni bosib
+ * to'g'ridan-to'g'ri navigatorda ocha oladi.
+ */
+export function sendLocation(chatId: number | string, latitude: number, longitude: number) {
+  return call('sendLocation', { chat_id: chatId, latitude, longitude })
 }
 
 /** HTML parse_mode uchun xavfli belgilarni ekranlaydi. */

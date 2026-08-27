@@ -8,6 +8,7 @@ import {
   Phone,
   Printer,
   Search,
+  Send,
   Trash2,
   User,
 } from 'lucide-react'
@@ -287,6 +288,23 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
     }
   }
 
+  /**
+   * Manzilni Telegram'ga lokatsiya ko'rinishida yuboradi — ostida mijoz
+   * ma'lumotlari va taomlar ro'yxati bilan. Kuryerga o'sha xabarni
+   * to'g'ridan-to'g'ri uzatish mumkin.
+   */
+  async function shareLocation() {
+    setBusy('location')
+    try {
+      const result = await adminPost<{ sent: number }>('order.location', { orderId: order.id })
+      toast(`Lokatsiya Telegram'ga yuborildi (${result.sent} ta chat)`)
+    } catch (error) {
+      toastError(error)
+    } finally {
+      setBusy('')
+    }
+  }
+
   async function remove() {
     setBusy('delete')
     try {
@@ -399,14 +417,21 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
             </div>
           )}
           {location && (
-            <a
-              className="adm-btn sm mt-2"
-              href={`https://maps.google.com/?q=${location.lat},${location.lng}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Xaritada ochish
-            </a>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button className="adm-btn sm" onClick={shareLocation} disabled={busy === 'location'}>
+                {busy === 'location' ? <Spinner /> : <Send size={14} />}
+                Xaritani ulashish
+              </button>
+              <a
+                className="adm-btn sm"
+                href={`https://maps.google.com/?q=${location.lat},${location.lng}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MapPin size={14} />
+                Xaritada ochish
+              </a>
+            </div>
           )}
         </div>
       </div>

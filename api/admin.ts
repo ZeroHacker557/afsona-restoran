@@ -12,8 +12,10 @@ import { escapeHtml, sendAny, sendMessage } from './_lib/telegram.js'
 import {
   displayId,
   miniAppButton,
+  notifyChatIds,
   notifyCustomerStatus,
   pushNotification,
+  sendOrderLocation,
   type OrderDoc,
 } from './_lib/order-notify.js'
 
@@ -79,6 +81,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return await handleOrderStatus(req, res)
       case 'order.payment':
         return await handleOrderPayment(req, res)
+      case 'order.location':
+        return await handleOrderLocation(req, res)
       case 'order.delete':
         return await handleOrderDelete(req, res)
       case 'notify.user':
@@ -469,6 +473,29 @@ async function handleOrderPayment(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({ ok: true })
+}
+
+/**
+ * Buyurtma manzilini adminlarning Telegram chatiga yuboradi:
+ * avval xarita nuqtasi (lokatsiya), ketidan mijoz va taomlar ro'yxati.
+ * Shu xabarni kuryerga to'g'ridan-to'g'ri uzatish mumkin.
+ */
+async function handleOrderLocation(req: VercelRequest, res: VercelResponse) {
+  const body = req.body as { orderId?: string; chatId?: number | string }
+  const orderId = String(body?.orderId || '')
+  if (!orderId) return fail(res, 400, 'Buyurtma ko‘rsatilmagan')
+
+  const order = await loadOrder(orderId)
+  if (!order) return fail(res, 404, 'Buyurtma topilmadi')
+
+  // Aniq chat ko'rsatilsa — o'shanga, aks holda barcha adminlarga
+  const single = Number(body?.chatId)
+  const chatIds = Number.isFinite(single) && single !== 0 ? [single] : await notifyChatIds()
+
+  const result = await sendOrderLocation(order.data, chatIds)
+  if (!result.sent) return fail(res, 400, result.error || 'Yuborilmadi')
+
+  return res.status(200).json({ ok: true, sent: result.sent })
 }
 
 async function handleOrderDelete(req: VercelRequest, res: VercelResponse) {

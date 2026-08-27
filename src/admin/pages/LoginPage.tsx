@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Eye, EyeOff, KeyRound, LogIn } from 'lucide-react'
+import { Eye, EyeOff, LogIn } from 'lucide-react'
 import { signIn } from '../lib/auth'
 import { BRAND, LOGO } from '../../config/brand'
 import { Field, Spinner } from '../components/ui'
@@ -12,9 +12,9 @@ import { Field, Spinner } from '../components/ui'
  * o'zi ochadi. (Ilgari bu yerdan ham holat o'zgartirilar edi — ikkisi
  * bir-birini bosib, panel "tekshirilmoqda" da qotib qolardi.)
  *
- * Pastda "birinchi sozlash" bo'limi bor: hali bironta admin yaratilmagan
- * bo'lsa (yoki parol yo'qolgan bo'lsa), Vercel'dagi ADMIN_SETUP_KEY kaliti
- * bilan hisob yaratiladi.
+ * Hisob yaratish va parolni tiklash bu yerda emas: yangi adminlar
+ * panelning "Adminlar" bo'limidan qo'shiladi, parol esa /api/admin ning
+ * `seed` amali orqali (ADMIN_SETUP_KEY bilan) tiklanadi.
  */
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -22,7 +22,6 @@ export function LoginPage() {
   const [visible, setVisible] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [setupOpen, setSetupOpen] = useState(false)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -109,99 +108,7 @@ export function LoginPage() {
           </form>
         </div>
 
-        <button
-          className="adm-btn ghost mx-auto mt-3 text-xs"
-          onClick={() => setSetupOpen((value) => !value)}
-        >
-          <KeyRound size={14} />
-          Birinchi sozlash / parolni tiklash
-        </button>
-
-        {setupOpen && <SetupForm />}
       </div>
     </main>
-  )
-}
-
-/** ADMIN_SETUP_KEY bilan birinchi admin hisobini yaratish. */
-function SetupForm() {
-  const [key, setKey] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [state, setState] = useState<{ busy: boolean; message: string; ok: boolean }>({
-    busy: false,
-    message: '',
-    ok: false,
-  })
-
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    setState({ busy: true, message: '', ok: false })
-    try {
-      const response = await fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'seed', key, email, password }),
-      })
-      const data = (await response.json().catch(() => null)) as { error?: string } | null
-      if (!response.ok) throw new Error(data?.error || `Xato ${response.status}`)
-      setState({ busy: false, ok: true, message: 'Tayyor! Endi shu email va parol bilan kiring.' })
-    } catch (problem) {
-      setState({
-        busy: false,
-        ok: false,
-        message: problem instanceof Error ? problem.message : 'Xato',
-      })
-    }
-  }
-
-  return (
-    <form className="adm-card mt-3 flex flex-col gap-3 p-4" onSubmit={submit}>
-      <p className="text-xs" style={{ color: 'var(--muted)' }}>
-        Vercel → Settings → Environment Variables da qo'yilgan <b>ADMIN_SETUP_KEY</b> ni kiriting.
-        Shu kalit bilan admin hisobi yaratiladi yoki paroli yangilanadi.
-      </p>
-
-      <input
-        className="adm-input"
-        placeholder="ADMIN_SETUP_KEY"
-        value={key}
-        onChange={(event) => setKey(event.target.value)}
-        required
-      />
-      <input
-        className="adm-input"
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-        required
-      />
-      <input
-        className="adm-input"
-        type="password"
-        placeholder="Yangi parol (kamida 8 belgi)"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        minLength={8}
-        required
-      />
-
-      {state.message && (
-        <p
-          className="rounded-[10px] px-3 py-2 text-sm font-semibold"
-          style={{
-            background: state.ok ? 'var(--success-soft)' : 'var(--danger-soft)',
-            color: state.ok ? 'var(--success)' : 'var(--danger)',
-          }}
-        >
-          {state.message}
-        </p>
-      )}
-
-      <button className="adm-btn primary" disabled={state.busy}>
-        {state.busy ? <Spinner /> : 'Hisobni yaratish'}
-      </button>
-    </form>
   )
 }

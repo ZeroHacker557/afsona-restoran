@@ -1,4 +1,4 @@
-import { escapeHtml, sendMessage, type Button } from './telegram.js'
+import { escapeHtml, sendLocation, sendMessage, type Button } from './telegram.js'
 import { adminDb } from './firebase-admin.js'
 
 /**
@@ -134,6 +134,74 @@ export function displayId(order: OrderDoc): string {
   return text.startsWith('#') ? text : `#${text}`
 }
 
+/**
+ * Lokatsiya ostiga yoziladigan qisqa ma'lumot: mijoz, telefon, manzil
+ * va taomlar. Kuryerga shu xabarning o'zi yetarli bo'lishi kerak.
+ */
+export function locationCaption(order: OrderDoc): string {
+  const customer = order.customer || {}
+  const items = Array.isArray(order.products) ? order.products : []
+
+  const lines: string[] = []
+  lines.push(`📍 <b>Yetkazish manzili — ${escapeHtml(displayId(order))}</b>`)
+  lines.push('')
+  lines.push(`👤 ${escapeHtml(customer.name || '—')}`)
+  lines.push(`📞 ${escapeHtml(customer.phone || '—')}`)
+  lines.push(`🏠 ${escapeHtml(customer.address || '—')}`)
+  if (customer.comment) lines.push(`📝 ${escapeHtml(customer.comment)}`)
+
+  if (items.length) {
+    lines.push('')
+    lines.push('🍽 <b>Buyurtma:</b>')
+    for (const item of items.slice(0, 30)) {
+      const name = item?.product?.name || 'Taom'
+      const qty = Number(item?.quantity) || 1
+      lines.push(`  • ${escapeHtml(name)} × ${qty}`)
+    }
+    if (items.length > 30) lines.push(`  … va yana ${items.length - 30} ta`)
+  }
+
+  lines.push('')
+  lines.push(`💰 <b>${money(order.total)}</b> · ${escapeHtml(order.paymentMethod || 'Naqd')}`)
+
+  return lines.join('\n')
+}
+
+/**
+ * Buyurtma lokatsiyasini berilgan chatlarga yuboradi: avval xarita
+ * nuqtasi, ketidan mijoz ma'lumotlari.
+ */
+export async function sendOrderLocation(
+  order: OrderDoc,
+  chatIds: number[],
+): Promise<{ sent: number; error?: string }> {
+  const location = order.customer?.location
+  const lat = Number(location?.lat)
+  const lng = Number(location?.lng)
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { sent: 0, error: 'Bu buyurtmada xarita nuqtasi yo‘q' }
+  }
+  if (!chatIds.length) {
+    return { sent: 0, error: 'Xabar yuboriladigan Telegram ID topilmadi' }
+  }
+
+  const caption = locationCaption(order)
+  let sent = 0
+
+  for (const chatId of chatIds) {
+    const pin = await sendLocation(chatId, lat, lng)
+    if (!pin.ok) {
+      console.error(`[notify] lokatsiya ${chatId}: ${pin.error}`)
+      continue
+    }
+    await sendMessage(chatId, caption)
+    sent++
+  }
+
+  return { sent }
+}
+
 /** Yangi buyurtma haqida adminlarga xabar. */
 export async function notifyAdminsNewOrder(order: OrderDoc): Promise<number> {
   const chatIds = await notifyChatIds()
@@ -174,6 +242,10 @@ export async function notifyAdminsNewOrder(order: OrderDoc): Promise<number> {
       text: '🗺 Xaritada ko\u2018rish',
       url: `https://maps.google.com/?q=${customer.location.lat},${customer.location.lng}`,
     })
+    // Bosilganda lokatsiya "joylashuv" ko'rinishida keladi, ostida esa
+    // mijoz va taomlar ro'yxati. Buni bot dasturi eshitadi (bot/bot.py),
+    // shuning uchun tugma faqat bot ishlab turganda javob beradi.
+    buttons.push({ text: '📍 Lokatsiyani olish', url: '', callback: `loc:${order.id}` })
   }
 
   const text = lines.join('\n')

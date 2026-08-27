@@ -51,6 +51,14 @@ BOT_TOKEN = _require('BOT_TOKEN')
 BOT_USERNAME = os.environ.get('BOT_USERNAME', '').lstrip('@')
 MINI_APP_URL = os.environ.get('MINI_APP_URL', '').rstrip('/')
 
+# Buyurtma xabarnomasi keladigan Telegram ID'lar. Asosiy ro'yxat
+# Firestore'dagi settings/admins hujjatida — bu esa zaxira.
+ADMIN_CHAT_IDS = {
+    int(part)
+    for part in os.environ.get('ADMIN_CHAT_IDS', '').replace(';', ',').split(',')
+    if part.strip().lstrip('-').isdigit()
+}
+
 # ─── Firebase ────────────────────────────────────────────────
 # Service account JSON fayli (bot uchun). Yo'l ko'rsatilmasa, loyiha
 # ildizidagi *-firebase-adminsdk-*.json fayli qidiriladi.

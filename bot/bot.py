@@ -16,6 +16,7 @@ import logging
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import (
+    CallbackQuery,
     KeyboardButton,
     MenuButtonWebApp,
     Message,
@@ -25,7 +26,7 @@ from aiogram.types import (
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from config import BOT_TOKEN, MINI_APP_URL
+from config import ADMIN_CHAT_IDS, BOT_TOKEN, MINI_APP_URL
 import firebase_db as db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -266,6 +267,86 @@ async def cmd_help(message: Message):
         "5️⃣ Buyurtma holati o'zgarganda sizga shu yerda xabar keladi.\n\n"
         "<i>Qo'shimcha savollar uchun «📞 Biz bilan aloqa» bo'limiga yozing.</i>"
     )
+
+
+# ─── Adminga lokatsiya yuborish ───────────────────────────────
+#
+# Yangi buyurtma xabaridagi «📍 Lokatsiyani olish» tugmasi shu yerga
+# tushadi. Xabarning o'zini Vercel funksiyasi yuboradi, lekin tugma
+# bosilishini faqat shu dastur eshita oladi — Telegram callback'ni
+# polling orqali beradi.
+
+
+def _is_admin(user_id: int) -> bool:
+    """Admin — .env dagi ADMIN_CHAT_IDS yoki settings/admins.ids ro'yxatida."""
+    if user_id in ADMIN_CHAT_IDS:
+        return True
+    try:
+        return user_id in db.get_extra_admin_ids()
+    except Exception as e:
+        logger.warning(f"[LOC] admin ro'yxati o'qilmadi: {e}")
+        return False
+
+
+def _location_caption(order: dict) -> str:
+    """Lokatsiya ostidagi matn: mijoz, telefon, manzil va taomlar."""
+    customer = order.get("customer") or {}
+    items = order.get("products") or []
+
+    lines = [
+        f"📍 <b>Yetkazish manzili — {db.order_display_id(order)}</b>",
+        "",
+        f"👤 {customer.get('name') or '—'}",
+        f"📞 {customer.get('phone') or '—'}",
+        f"🏠 {customer.get('address') or '—'}",
+    ]
+    if customer.get("comment"):
+        lines.append(f"📝 {customer['comment']}")
+
+    if items:
+        lines.append("")
+        lines.append("🍽 <b>Buyurtma:</b>")
+        for item in items[:30]:
+            product = item.get("product") or {}
+            name = product.get("name") or "Taom"
+            qty = item.get("quantity") or 1
+            lines.append(f"  • {name} × {qty}")
+        if len(items) > 30:
+            lines.append(f"  … va yana {len(items) - 30} ta")
+
+    lines.append("")
+    lines.append(
+        f"💰 <b>{db.format_price(order.get('total') or 0)}</b>"
+        f" · {order.get('paymentMethod') or 'Naqd'}"
+    )
+    return "\n".join(lines)
+
+
+@dp.callback_query(F.data.startswith("loc:"))
+async def cb_send_location(callback: CallbackQuery):
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("Ruxsat yo'q", show_alert=True)
+        return
+
+    order_id = callback.data.split("loc:", 1)[-1]
+    order = db.get_order_by_id(order_id)
+    if not order:
+        await callback.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    location = (order.get("customer") or {}).get("location") or {}
+    lat, lng = location.get("lat"), location.get("lng")
+    if lat is None or lng is None:
+        await callback.answer("Bu buyurtmada xarita nuqtasi yo'q", show_alert=True)
+        return
+
+    try:
+        await bot.send_location(callback.message.chat.id, latitude=float(lat), longitude=float(lng))
+        await bot.send_message(callback.message.chat.id, _location_caption(order))
+        await callback.answer("📍 Yuborildi")
+    except Exception as e:
+        logger.warning(f"[LOC] yuborilmadi: {e}")
+        await callback.answer("Yuborib bo'lmadi", show_alert=True)
 
 
 # ─── Main ─────────────────────────────────────────────────────
