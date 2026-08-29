@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ShoppingBag, X } from 'lucide-react'
 import { formatPrice } from '../../data'
 import { formatOrderDate } from '../../utils/date'
@@ -14,6 +15,12 @@ import type { Order } from '../../types/domain'
  * ochiladi. Chekning yon chekkalari kertikli — qog'oz chek taassurotini
  * beradi (mask qo'llab-quvvatlanmasa oddiy burchak bo'lib qoladi,
  * ko'rinish buzilmaydi).
+ *
+ * Nega portal: sahifa `.page-animate` ichida chiziladi, u esa transform
+ * animatsiyasi tufayli o'z stacking-kontekstini yaratadi. Shu sababli
+ * ichkarida turgan `position: fixed` element viewportga emas, o'sha
+ * blokka bo'ysunadi va pastki menyu (z-index 20) uning ustiga chiqib
+ * qolardi. `document.body` ga chiqarilganda bu muammo yo'qoladi.
  */
 
 type Props = {
@@ -27,12 +34,15 @@ export function OrderReceipt({ order, onClose }: Props) {
   const t = useT()
   const cancelled = CANCELLED.includes(order.status)
 
-  // Orqa fon aylanmasin — chek ochiq turganda faqat chek suriladi
+  // Orqa fon aylanmasin va pastki menyu ko'rinmasin — chek ochiq
+  // turganda ekranda faqat chek qolsin.
   useEffect(() => {
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    document.body.classList.add('receipt-open')
     return () => {
       document.body.style.overflow = previous
+      document.body.classList.remove('receipt-open')
     }
   }, [])
 
@@ -48,7 +58,7 @@ export function OrderReceipt({ order, onClose }: Props) {
     order.subtotal ??
     order.products.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
 
-  return (
+  return createPortal(
     <div className="receipt-overlay" role="dialog" aria-modal="true">
       <button className="receipt-close" onClick={onClose} aria-label={t('common.close')}>
         <X size={20} />
@@ -157,6 +167,7 @@ export function OrderReceipt({ order, onClose }: Props) {
       <button className="receipt-button" onClick={onClose}>
         {t('receipt.close')}
       </button>
-    </div>
+    </div>,
+    document.body,
   )
 }

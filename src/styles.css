@@ -987,6 +987,9 @@ a { color: inherit; text-decoration: none; }
    bosqichma-bosqich animatsiyalangan.
    ══════════════════════════════════════════════════════════════ */
 
+/* Chek ochilganda pastki menyu butunlay yo'qoladi */
+body.receipt-open .bottom-nav { display: none; }
+
 .receipt-overlay {
   position: fixed;
   inset: 0;
