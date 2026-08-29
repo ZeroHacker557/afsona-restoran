@@ -15,6 +15,7 @@ import {
   Ticket,
   UtensilsCrossed,
   Users,
+  Bike,
 } from 'lucide-react'
 import { claimAdmin, onAdminAuthChanged, signOutAdmin } from './lib/auth'
 import { AdminDataProvider } from './store'
@@ -29,6 +30,7 @@ import { BroadcastPage } from './pages/BroadcastPage'
 import { CustomersPage } from './pages/CustomersPage'
 import { StatsPage } from './pages/StatsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { CouriersPage } from './pages/CouriersPage'
 import { AdminsPage } from './pages/AdminsPage'
 import { ToastHost } from './components/Toast'
 import { toast } from './lib/toast'
@@ -40,7 +42,7 @@ import { saveSetting } from './lib/db'
 
 type Route =
   | 'dashboard' | 'orders' | 'products' | 'categories' | 'promos'
-  | 'broadcast' | 'customers' | 'stats' | 'settings' | 'admins'
+  | 'broadcast' | 'customers' | 'stats' | 'settings' | 'couriers' | 'admins'
 
 const NAV: { id: Route; label: string; icon: typeof LayoutDashboard; group?: string }[] = [
   { id: 'dashboard', label: 'Bosh sahifa', icon: LayoutDashboard },
@@ -48,6 +50,7 @@ const NAV: { id: Route; label: string; icon: typeof LayoutDashboard; group?: str
   { id: 'products', label: 'Taomlar', icon: UtensilsCrossed, group: 'Katalog' },
   { id: 'categories', label: 'Kategoriyalar', icon: FolderTree },
   { id: 'promos', label: 'Promokodlar', icon: Ticket },
+  { id: 'couriers', label: 'Kuryerlar', icon: Bike },
   { id: 'broadcast', label: 'Xabarnoma', icon: Megaphone, group: 'Mijozlar' },
   { id: 'customers', label: 'Mijozlar', icon: Users },
   { id: 'stats', label: 'Statistika', icon: BarChart3, group: 'Boshqaruv' },
@@ -65,6 +68,7 @@ const TITLES: Record<Route, string> = {
   customers: 'Mijozlar',
   stats: 'Statistika',
   settings: 'Sozlamalar',
+  couriers: 'Kuryerlar',
   admins: 'Adminlar',
 }
 
@@ -271,6 +275,7 @@ function Shell({ email }: { email: string }) {
           {route === 'customers' && <CustomersPage />}
           {route === 'stats' && <StatsPage />}
           {route === 'settings' && <SettingsPage />}
+          {route === 'couriers' && <CouriersPage />}
           {route === 'admins' && <AdminsPage />}
         </div>
       </div>

@@ -102,6 +102,7 @@ Ro'yxat ([`.env.example`](./.env.example) da izohlari bor):
 | `MINI_APP_URL` | Xabarlardagi «Ilovani ochish» tugmasi |
 | `ADMIN_PANEL_URL` | Buyurtma xabaridagi «Panelda ochish» tugmasi |
 | `ADMIN_CHAT_IDS` | Buyurtma xabari keladigan Telegram ID'lar (zaxira) |
+| `BOT_API_SECRET` | Bot ↔ API maxfiy kaliti — kuryer tugmalari shusiz ishlamaydi |
 
 Qo'shgandan keyin **qayta deploy qiling** — Vercel env'ni faqat yangi
 build'ga qo'llaydi.
@@ -137,6 +138,42 @@ allaqachon qo'shilgan; boshqa ID'ni [@userinfobot](https://t.me/userinfobot)
 aytadi. Yangi buyurtma kelganda shu chatlarga xabar tushadi.
 
 Keyin **Kategoriyalar** → **Taomlar** ni to'ldiring.
+
+---
+
+## 5a. Kuryerlar
+
+Panelning **Kuryerlar** bo'limida:
+
+1. **Kuryer qo'shish** — Telegram ID, ism, telefon. ID'ni kuryerning o'zi
+   [@userinfobot](https://t.me/userinfobot) dan oladi.
+2. Kuryer botni bir marta ochib `/start` bosishi kerak — aks holda
+   Telegram unga xabar yubora olmaydi.
+3. **Xodimlar guruhi** (ixtiyoriy): botni guruhga qo'shing va guruhda
+   administrator `/guruh` deb yozsin. Guruh o'zi biriktiriladi.
+
+Buyurtma tushganda kuryerlarga (va guruhga) tugmali xabar boradi:
+
+```
+[🗺 Xaritada ko'rish]
+[📦 Oldim]              ← birinchi bosgan kuryer oladi
+```
+
+«Oldim» bosilgach mijozning ismi va telefoni ochiladi, status
+«Yetkazilmoqda» bo'ladi va mijozga xabar ketadi. Keyin:
+
+```
+[📍 Lokatsiyani olish]
+[✅ Yetkazildi]
+```
+
+Guruhda kuryer bo'lmagan odam tugmani bossa — «bu tugma faqat kuryer
+uchun» deb chiqadi va hech narsa o'zgarmaydi.
+
+> ⚠️ Bu tugmalar **bot ishlab turganda** ishlaydi. Bot o'chiq bo'lsa,
+> buyurtma baribir keladi va panelda ko'rinadi — faqat kuryer tugmasi
+> javob bermaydi. Shuning uchun botni doimiy serverga ko'chirish tavsiya
+> etiladi.
 
 ---
 

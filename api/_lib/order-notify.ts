@@ -16,7 +16,13 @@ export type OrderDoc = {
   discount?: number
   deliveryFee?: number
   paymentMethod?: string
+  paymentStatus?: string
   status?: string
+  /** Buyurtmani olgan kuryerning Telegram id'si. */
+  courierId?: number
+  courierName?: string
+  /** Kuryerlarga yuborilgan xabarlar — keyin tahrirlash uchun. */
+  courierMsgs?: { chatId: number; messageId: number }[]
   products?: {
     product?: { name?: string; price?: number }
     quantity?: number

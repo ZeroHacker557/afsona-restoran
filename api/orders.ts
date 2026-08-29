@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
 import { getOpenState, readHours } from './_lib/hours.js'
 import { notifyAdminsNewOrder } from './_lib/order-notify.js'
+import { notifyCouriersNewOrder } from './_lib/courier.js'
 
 const ORDER_NUMBER_START = 1000
 
@@ -341,8 +342,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!result.duplicate) {
       try {
         const snap = await db.collection('orders').doc(result.id).get()
-        const sent = await notifyAdminsNewOrder({ ...snap.data(), id: snap.id })
+        const order = { ...snap.data(), id: snap.id }
+
+        const sent = await notifyAdminsNewOrder(order)
         if (sent > 0) await snap.ref.update({ notified: true })
+
+        // Kuryerlarga va xodimlar guruhiga — tugmalari bilan
+        await notifyCouriersNewOrder(order)
       } catch (error) {
         // Xabar ketmasa ham buyurtma yaratilgan — mijozga muvaffaqiyat
         console.error('[orders] admin xabarnomasi:', error)

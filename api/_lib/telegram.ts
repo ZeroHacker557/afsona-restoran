@@ -8,7 +8,13 @@
 
 const API_BASE = 'https://api.telegram.org/bot'
 
-export type SendResult = { ok: boolean; error?: string; blocked?: boolean }
+export type SendResult = {
+  ok: boolean
+  error?: string
+  blocked?: boolean
+  /** Yuborilgan xabar identifikatori — keyin tahrirlash uchun kerak. */
+  messageId?: number
+}
 
 function token(): string {
   const value = process.env.BOT_TOKEN
@@ -29,10 +35,10 @@ async function call(method: string, payload: Record<string, unknown>): Promise<S
   }
 
   const data = (await response.json().catch(() => null)) as
-    | { ok: boolean; description?: string; error_code?: number }
+    | { ok: boolean; description?: string; error_code?: number; result?: { message_id?: number } }
     | null
 
-  if (data?.ok) return { ok: true }
+  if (data?.ok) return { ok: true, messageId: data.result?.message_id }
 
   const description = data?.description || `HTTP ${response.status}`
   // 403 — foydalanuvchi botni bloklagan yoki hech qachon ochmagan.
@@ -112,6 +118,27 @@ export function sendAny(
   if (opts.videoUrl) return sendVideo(chatId, opts.videoUrl, opts.text, opts.buttons)
   if (opts.photoUrl) return sendPhoto(chatId, opts.photoUrl, opts.text, opts.buttons)
   return sendMessage(chatId, opts.text, opts.buttons)
+}
+
+/**
+ * Yuborilgan xabarni tahrirlaydi — matnini ham, tugmalarini ham.
+ * Kuryer tugmani bosgach, o'sha xabarning o'zi yangilanadi: eski tugma
+ * yo'qoladi, o'rniga keyingi qadam chiqadi.
+ */
+export function editMessageText(
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  buttons?: Button[],
+) {
+  return call('editMessageText', {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+    reply_markup: markup(buttons),
+  })
 }
 
 /**

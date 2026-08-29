@@ -82,6 +82,11 @@ export type AdminOrder = {
   deliveryFee?: number
   userId?: number
   username?: string | null
+  /** Buyurtmani olgan kuryer (Telegram tugmasi orqali). */
+  courierId?: number | null
+  courierName?: string | null
+  claimedAt?: string | null
+  deliveredAt?: string | null
   products: {
     product: { id: number | string; name: string; price: number; images?: string[] }
     quantity: number
@@ -300,6 +305,10 @@ export function watchOrders(onData: (items: AdminOrder[]) => void, onError?: (e:
       deliveryFee: num(data.deliveryFee),
       userId: num(data.userId),
       username: data.username == null ? null : str(data.username),
+      courierId: data.courierId == null ? null : num(data.courierId),
+      courierName: data.courierName == null ? null : str(data.courierName),
+      claimedAt: data.claimedAt == null ? null : str(data.claimedAt),
+      deliveredAt: data.deliveredAt == null ? null : str(data.deliveredAt),
       products: Array.isArray(data.products) ? (data.products as AdminOrder['products']) : [],
       customer: (data.customer || {}) as AdminOrder['customer'],
     }),
@@ -421,6 +430,34 @@ export const readBrand = (data?: Record<string, unknown>): BrandSettings => ({
 
 export const readHoursDoc = (data?: Record<string, unknown>): WorkingHours =>
   data ? readHours(data) : DEFAULT_HOURS
+
+export type Courier = { id: number; name: string; phone?: string; active?: boolean }
+export type CourierSettings = {
+  list: Courier[]
+  groupChatId: number | null
+  groupTitle: string
+  mode: 'private' | 'group' | 'both'
+}
+
+export const readCouriers = (data?: Record<string, unknown>): CourierSettings => {
+  const raw = Array.isArray(data?.list) ? (data.list as Record<string, unknown>[]) : []
+  const group = num(data?.groupChatId)
+  const mode = data?.mode
+
+  return {
+    list: raw
+      .map((item) => ({
+        id: num(item?.id),
+        name: str(item?.name),
+        phone: str(item?.phone) || undefined,
+        active: item?.active !== false,
+      }))
+      .filter((item) => item.id !== 0),
+    groupChatId: group === 0 ? null : group,
+    groupTitle: str(data?.groupTitle),
+    mode: mode === 'private' || mode === 'group' ? mode : 'both',
+  }
+}
 
 export function saveSetting(docId: string, value: Record<string, unknown>) {
   return setDoc(doc(db, 'settings', docId), value, { merge: true })

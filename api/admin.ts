@@ -5,9 +5,17 @@ import {
   ADMINS_DOC,
   allowedAdminEmails,
   envAdminEmails,
+  isBotRequest,
   normalizeEmail,
   requireAdmin,
 } from './_lib/admin-auth.js'
+import {
+  bindGroup,
+  findCourier,
+  handleCourierAction,
+  readCourierSettings,
+  syncCourierMessages,
+} from './_lib/courier.js'
 import { escapeHtml, sendAny, sendMessage } from './_lib/telegram.js'
 import {
   displayId,
@@ -58,6 +66,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Bu ikkisi admin claim'siz chaqiriladi — ular claim beradi
     if (action === 'session') return await handleSession(req, res)
     if (action === 'seed') return await handleSeed(req, res)
+
+    // Bular bot dasturidan keladi — Firebase Auth emas, maxfiy kalit bilan
+    if (action === 'courier.action') return await handleCourierButton(req, res)
+    if (action === 'courier.group') return await handleCourierGroup(req, res)
 
     const admin = await requireAdmin(req, res)
     if (!admin) return
@@ -434,7 +446,11 @@ async function handleOrderStatus(req: VercelRequest, res: VercelResponse) {
   if (!order) return fail(res, 404, 'Buyurtma topilmadi')
 
   await order.ref.update({ status, statusUpdatedAt: new Date().toISOString() })
-  await notifyCustomerStatus({ ...order.data, status }, status)
+
+  const updated = { ...order.data, status }
+  await notifyCustomerStatus(updated, status)
+  // Guruhdagi/kuryerdagi xabar ham yangilansin — eskirgan tugma qolmasin
+  await syncCourierMessages(updated)
 
   return res.status(200).json({ ok: true })
 }
@@ -504,4 +520,77 @@ async function handleOrderDelete(req: VercelRequest, res: VercelResponse) {
 
   await (await adminDb()).collection('orders').doc(orderId).delete()
   return res.status(200).json({ ok: true })
+}
+
+// ── Kuryer tugmalari (bot orqali) ────────────────────────────
+
+/**
+ * Bot kuryerning tugma bosganini shu yerga uzatadi. Butun tekshiruv va
+ * status o'zgarishi shu yerda bo'ladi — bot hech narsa hal qilmaydi.
+ */
+async function handleCourierButton(req: VercelRequest, res: VercelResponse) {
+  if (!isBotRequest(req)) return fail(res, 403, 'Ruxsat yo‘q')
+
+  const body = req.body as {
+    orderId?: string
+    userId?: number | string
+    chatId?: number | string
+    act?: string
+  }
+  const orderId = String(body?.orderId || '')
+  const userId = Number(body?.userId)
+  const act = body?.act
+
+  if (!orderId || !act) return fail(res, 400, 'So‘rov to‘liq emas')
+  if (!Number.isFinite(userId) || userId === 0) return fail(res, 400, 'Foydalanuvchi noto‘g‘ri')
+
+  // Lokatsiya so'rovi: kuryer ham, admin ham olishi mumkin
+  if (act === 'loc') {
+    const chatId = Number(body?.chatId)
+    if (!Number.isFinite(chatId) || chatId === 0) return fail(res, 400, 'Chat noto‘g‘ri')
+
+    const settings = await readCourierSettings()
+    const admins = await notifyChatIds()
+    if (!findCourier(settings, userId) && !admins.includes(userId)) {
+      return res.status(200).json({ ok: false, alert: 'Ruxsat yo‘q.', loud: true })
+    }
+
+    const order = await loadOrder(orderId)
+    if (!order) return res.status(200).json({ ok: false, alert: 'Buyurtma topilmadi.', loud: true })
+
+    const result = await sendOrderLocation(order.data, [chatId])
+    return res.status(200).json(
+      result.sent
+        ? { ok: true, alert: '📍 Yuborildi' }
+        : { ok: false, alert: result.error || 'Yuborilmadi', loud: true },
+    )
+  }
+
+  if (act !== 'take' && act !== 'done') return fail(res, 400, 'Noma‘lum amal')
+
+  const result = await handleCourierAction(act, orderId, userId)
+  return res.status(200).json(result)
+}
+
+/** `/guruh` buyrug'i — xodimlar guruhini biriktiradi. */
+async function handleCourierGroup(req: VercelRequest, res: VercelResponse) {
+  if (!isBotRequest(req)) return fail(res, 403, 'Ruxsat yo‘q')
+
+  const body = req.body as { chatId?: number | string; title?: string; userId?: number | string }
+  const chatId = Number(body?.chatId)
+  const userId = Number(body?.userId)
+
+  if (!Number.isFinite(chatId) || chatId === 0) return fail(res, 400, 'Guruh noto‘g‘ri')
+
+  // Guruhni faqat admin biriktira oladi
+  const admins = await notifyChatIds()
+  if (!admins.includes(userId)) {
+    return res.status(200).json({
+      ok: false,
+      text: '⛔ Guruhni faqat administrator biriktira oladi.',
+    })
+  }
+
+  const text = await bindGroup(chatId, String(body?.title || ''))
+  return res.status(200).json({ ok: true, text })
 }

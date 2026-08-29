@@ -6,6 +6,7 @@ import {
   List,
   MapPin,
   Phone,
+  Bike,
   Printer,
   Search,
   Send,
@@ -405,6 +406,19 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
             </a>
           )}
         </div>
+
+        {order.courierName && (
+          <div className="adm-card adm-card-pad">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+              <Bike size={15} /> Kuryer
+            </div>
+            <div className="text-sm">{order.courierName}</div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>
+              {order.claimedAt ? `Oldi: ${formatDateTime(order.claimedAt)}` : ''}
+              {order.deliveredAt ? ` · Yetkazdi: ${formatDateTime(order.deliveredAt)}` : ''}
+            </div>
+          </div>
+        )}
 
         <div className="adm-card adm-card-pad">
           <div className="mb-2 flex items-center gap-2 text-sm font-bold">

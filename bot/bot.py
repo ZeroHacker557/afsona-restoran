@@ -14,6 +14,8 @@ buyurtmalar va xabarlar yo'qolmaydi.
 import asyncio
 import logging
 
+import aiohttp
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import (
     CallbackQuery,
@@ -26,7 +28,7 @@ from aiogram.types import (
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from config import ADMIN_CHAT_IDS, BOT_TOKEN, MINI_APP_URL
+from config import API_BASE_URL, BOT_API_SECRET, BOT_TOKEN, MINI_APP_URL
 import firebase_db as db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -269,84 +271,80 @@ async def cmd_help(message: Message):
     )
 
 
-# ─── Adminga lokatsiya yuborish ───────────────────────────────
+# ─── Buyurtma tugmalari (kuryer va admin) ─────────────────────
 #
-# Yangi buyurtma xabaridagi «📍 Lokatsiyani olish» tugmasi shu yerga
-# tushadi. Xabarning o'zini Vercel funksiyasi yuboradi, lekin tugma
-# bosilishini faqat shu dastur eshita oladi — Telegram callback'ni
-# polling orqali beradi.
+# Bu yerda hech qanday qoida yo'q: bot faqat "falonchi shu tugmani bosdi"
+# deb API'ga aytadi. Kim kuryer, buyurtmani kim olgan, status qanday
+# o'zgaradi, mijozga nima yoziladi — hammasi serverda hal bo'ladi
+# (api/_lib/courier.ts). Shu tufayli qoidalar bitta joyda turadi va
+# panel bilan bot hech qachon bir-biriga zid ish qilmaydi.
 
 
-def _is_admin(user_id: int) -> bool:
-    """Admin — .env dagi ADMIN_CHAT_IDS yoki settings/admins.ids ro'yxatida."""
-    if user_id in ADMIN_CHAT_IDS:
-        return True
+async def _api(action: str, payload: dict) -> dict:
+    """Vercel API'ga so'rov yuboradi. Xato bo'lsa bo'sh javob qaytaradi."""
+    if not API_BASE_URL or not BOT_API_SECRET:
+        logger.warning("[API] API_BASE_URL yoki BOT_API_SECRET sozlanmagan")
+        return {}
+
+    url = f"{API_BASE_URL}/api/admin"
+    body = {"action": action, **payload}
+
     try:
-        return user_id in db.get_extra_admin_ids()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url,
+                json=body,
+                headers={"X-Bot-Secret": BOT_API_SECRET},
+                timeout=aiohttp.ClientTimeout(total=25),
+            ) as response:
+                data = await response.json(content_type=None)
+                if not isinstance(data, dict):
+                    return {}
+                return data
     except Exception as e:
-        logger.warning(f"[LOC] admin ro'yxati o'qilmadi: {e}")
-        return False
+        logger.warning(f"[API] {action}: {e}")
+        return {}
 
 
-def _location_caption(order: dict) -> str:
-    """Lokatsiya ostidagi matn: mijoz, telefon, manzil va taomlar."""
-    customer = order.get("customer") or {}
-    items = order.get("products") or []
+@dp.callback_query(F.data.regexp(r"^(take|done|loc):"))
+async def cb_order_button(callback: CallbackQuery):
+    act, order_id = callback.data.split(":", 1)
 
-    lines = [
-        f"📍 <b>Yetkazish manzili — {db.order_display_id(order)}</b>",
-        "",
-        f"👤 {customer.get('name') or '—'}",
-        f"📞 {customer.get('phone') or '—'}",
-        f"🏠 {customer.get('address') or '—'}",
-    ]
-    if customer.get("comment"):
-        lines.append(f"📝 {customer['comment']}")
-
-    if items:
-        lines.append("")
-        lines.append("🍽 <b>Buyurtma:</b>")
-        for item in items[:30]:
-            product = item.get("product") or {}
-            name = product.get("name") or "Taom"
-            qty = item.get("quantity") or 1
-            lines.append(f"  • {name} × {qty}")
-        if len(items) > 30:
-            lines.append(f"  … va yana {len(items) - 30} ta")
-
-    lines.append("")
-    lines.append(
-        f"💰 <b>{db.format_price(order.get('total') or 0)}</b>"
-        f" · {order.get('paymentMethod') or 'Naqd'}"
+    result = await _api(
+        "courier.action",
+        {
+            "act": act,
+            "orderId": order_id,
+            "userId": callback.from_user.id,
+            "chatId": callback.message.chat.id,
+        },
     )
-    return "\n".join(lines)
+
+    alert = result.get("alert") or result.get("error") or "Bajarilmadi, qayta urining."
+    await callback.answer(alert, show_alert=bool(result.get("loud")))
 
 
-@dp.callback_query(F.data.startswith("loc:"))
-async def cb_send_location(callback: CallbackQuery):
-    if not _is_admin(callback.from_user.id):
-        await callback.answer("Ruxsat yo'q", show_alert=True)
+@dp.message(F.text.regexp(r"^/guruh"))
+async def cmd_bind_group(message: Message):
+    """Xodimlar guruhini biriktiradi. Faqat admin ishlata oladi."""
+    chat = message.chat
+
+    if chat.type not in ("group", "supergroup"):
+        await message.answer(
+            "Bu buyruq guruh ichida ishlaydi. Avval botni guruhga qo'shing, "
+            "so'ng o'sha yerda <code>/guruh</code> deb yozing."
+        )
         return
 
-    order_id = callback.data.split("loc:", 1)[-1]
-    order = db.get_order_by_id(order_id)
-    if not order:
-        await callback.answer("Buyurtma topilmadi", show_alert=True)
-        return
+    result = await _api(
+        "courier.group",
+        {"chatId": chat.id, "title": chat.title or "", "userId": message.from_user.id},
+    )
 
-    location = (order.get("customer") or {}).get("location") or {}
-    lat, lng = location.get("lat"), location.get("lng")
-    if lat is None or lng is None:
-        await callback.answer("Bu buyurtmada xarita nuqtasi yo'q", show_alert=True)
-        return
-
-    try:
-        await bot.send_location(callback.message.chat.id, latitude=float(lat), longitude=float(lng))
-        await bot.send_message(callback.message.chat.id, _location_caption(order))
-        await callback.answer("📍 Yuborildi")
-    except Exception as e:
-        logger.warning(f"[LOC] yuborilmadi: {e}")
-        await callback.answer("Yuborib bo'lmadi", show_alert=True)
+    await message.answer(
+        result.get("text")
+        or "Guruhni biriktirib bo'lmadi. Internet va sozlamalarni tekshiring."
+    )
 
 
 # ─── Main ─────────────────────────────────────────────────────

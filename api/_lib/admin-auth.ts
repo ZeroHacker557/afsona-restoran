@@ -52,6 +52,21 @@ export async function allowedAdminEmails(): Promise<Set<string>> {
   return emails
 }
 
+/**
+ * So'rov bot dasturidan kelganmi?
+ *
+ * Bot Firebase Auth'dan o'tolmaydi (u brauzer emas), shuning uchun
+ * BOT_API_SECRET maxfiy kaliti bilan tanitiladi. Kalit faqat serverda
+ * va bot mashinasida bo'ladi.
+ */
+export function isBotRequest(req: VercelRequest): boolean {
+  const secret = process.env.BOT_API_SECRET
+  if (!secret) return false
+  const header = req.headers['x-bot-secret']
+  const value = Array.isArray(header) ? header[0] : header
+  return typeof value === 'string' && value === secret
+}
+
 function bearer(req: VercelRequest): string {
   const header = req.headers.authorization || ''
   return header.startsWith('Bearer ') ? header.slice(7).trim() : ''

@@ -59,6 +59,12 @@ ADMIN_CHAT_IDS = {
     if part.strip().lstrip('-').isdigit()
 }
 
+# ─── Vercel API ──────────────────────────────────────────────
+# Tugma bosilganda bot qoidalarni o'zi hal qilmaydi — API'ga uzatadi.
+# Shu sababli status, xabar va ruxsat mantiqi bitta joyda turadi.
+API_BASE_URL = os.environ.get('ADMIN_PANEL_URL', '').replace('/admin', '').rstrip('/')     or os.environ.get('MINI_APP_URL', '').rstrip('/')
+BOT_API_SECRET = os.environ.get('BOT_API_SECRET', '').strip()
+
 # ─── Firebase ────────────────────────────────────────────────
 # Service account JSON fayli (bot uchun). Yo'l ko'rsatilmasa, loyiha
 # ildizidagi *-firebase-adminsdk-*.json fayli qidiriladi.
