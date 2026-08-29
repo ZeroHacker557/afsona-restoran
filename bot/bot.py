@@ -58,17 +58,20 @@ def main_kb() -> ReplyKeyboardMarkup:
     )
 
 
-def orders_kb() -> InlineKeyboardMarkup | None:
-    """«Buyurtmalarim» — ilovani to'g'ridan-to'g'ri o'sha bo'limda ochadi."""
+def app_kb(text: str, page: str = "") -> InlineKeyboardMarkup | None:
+    """
+    Ilovani ochadigan inline tugma.
+
+    `web_app` turidagi tugma ilovani Telegram ICHIDA ochadi — brauzerga
+    olib chiqib ketmaydi. `page` berilsa, ilova to'g'ridan-to'g'ri o'sha
+    bo'limda ochiladi (mini app `?page=` ni o'qiydi).
+    """
     if not MINI_APP_URL:
         return None
+
+    url = f"{MINI_APP_URL}/?page={page}" if page else MINI_APP_URL
     return InlineKeyboardMarkup(
-        inline_keyboard=[[
-            InlineKeyboardButton(
-                text="📦 Buyurtmalarim",
-                web_app=WebAppInfo(url=f"{MINI_APP_URL}/?page=orders"),
-            )
-        ]]
+        inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))]]
     )
 
 
@@ -180,13 +183,12 @@ async def handle_open_catalog(message: Message):
     await message.answer(
         "🍽 <b>MENYU</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Restoranimiz menyusi Telegram ilovasi ichida ochiladi.\n\n"
-        "👇 Pastda, <b>yozuv maydonining chap tomonida</b>\n"
-        "   <b>«🍽 Menyu»</b> tugmasi turibdi.\n\n"
-        "Shu tugmani bosing — menyu shu yerning o'zida ochiladi.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        "✨ <i>Taomlarni ko'ring, savatga qo'shing va\n"
-        "bir necha bosishda buyurtma bering.</i>"
+        "Barcha taomlarimiz rasmlari va narxlari bilan ilovada.\n\n"
+        "🔸 Kategoriyalar bo'yicha tanlaysiz\n"
+        "🔸 Savatga qo'shib, bir necha bosishda buyurtma berasiz\n"
+        "🔸 Manzilni xaritadan belgilaysiz\n\n"
+        "👇 <i>Ochish uchun tugmani bosing</i>",
+        reply_markup=app_kb("🍽 Menyuni ochish", "catalog"),
     )
 
 
@@ -212,7 +214,7 @@ async def handle_my_orders(message: Message):
         "👇 <i>Ochish uchun tugmani bosing</i>"
     )
 
-    await message.answer(text, reply_markup=orders_kb())
+    await message.answer(text, reply_markup=app_kb("📦 Buyurtmalarim", "orders"))
 
 
 @dp.message(F.text == "📞 Biz bilan aloqa")
