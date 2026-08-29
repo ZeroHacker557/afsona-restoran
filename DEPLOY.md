@@ -152,20 +152,19 @@ Panelning **Kuryerlar** bo'limida:
 3. **Xodimlar guruhi** (ixtiyoriy): botni guruhga qo'shing va guruhda
    administrator `/guruh` deb yozsin. Guruh o'zi biriktiriladi.
 
-Buyurtma tushganda kuryerlarga (va guruhga) tugmali xabar boradi:
+Buyurtma tushganda kuryerlarga (va guruhga) xabar boradi, lekin
+**tugma darhol chiqmaydi**:
 
-```
-[🗺 Xaritada ko'rish]
-[📦 Oldim]              ← birinchi bosgan kuryer oladi
-```
+| Holat | Kuryer nima ko'radi |
+|---|---|
+| **Yangi** | «⏳ Admin tasdiqlashini kutmoqda» — olish tugmasi yo'q |
+| **Qabul qilindi** | `[📦 Oldim]` — admin panelda tasdiqlagach o'zi paydo bo'ladi |
+| **Yetkazilmoqda** | `[📍 Lokatsiyani olish]` `[✅ Yetkazildi]` |
+| **Yetkazildi** | Tugmalar yo'q, «🎉 Yetkazildi» |
 
-«Oldim» bosilgach mijozning ismi va telefoni ochiladi, status
-«Yetkazilmoqda» bo'ladi va mijozga xabar ketadi. Keyin:
-
-```
-[📍 Lokatsiyani olish]
-[✅ Yetkazildi]
-```
+Ya'ni tartib: **admin qabul qiladi → kuryer oladi → yetkazadi.**
+«Oldim» ni birinchi bosgan kuryer buyurtmani oladi; shundan keyin
+mijozning ismi va telefoni ochiladi va mijozga xabar ketadi.
 
 Guruhda kuryer bo'lmagan odam tugmani bossa — «bu tugma faqat kuryer
 uchun» deb chiqadi va hech narsa o'zgarmaydi.

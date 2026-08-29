@@ -6,13 +6,18 @@ import { displayId, money, notifyCustomerStatus, type OrderDoc } from './order-n
  * Kuryerlar oqimi.
  *
  * Buyurtma yaratilganda u kuryerlarga (shaxsiy chatga) va/yoki xodimlar
- * guruhiga tugmalar bilan yuboriladi:
+ * guruhiga yuboriladi. Holatlar ketma-ketligi:
  *
- *   [📦 Oldim]  → buyurtmani o'ziga biriktiradi, status "Yetkazilmoqda"
- *   [✅ Yetkazildi] → status "Yetkazildi"
+ *   Yangi            → kuryerda tugma YO'Q, "admin tasdiqlashini kutmoqda"
+ *   Qabul qilindi    → [📦 Oldim] chiqadi (admin panelda tasdiqlagach)
+ *   Yetkazilmoqda    → [📍 Lokatsiya] [✅ Yetkazildi]
+ *   Yetkazildi       → tugmalar yo'q
  *
  * MUHIM tamoyillar:
  *
+ * 0. Kuryer buyurtmani admin TASDIQLAGANDAN keyin oladi. Admin
+ *    "Qabul qilindi" bosishi bilan kuryerdagi xabar o'zi yangilanadi
+ *    va tugma paydo bo'ladi.
  * 1. Tugmani faqat KURYER bosa oladi. Guruhda boshqa odam bossa,
  *    unga "bu tugma faqat kuryer uchun" deb ogohlantirish chiqadi va
  *    hech narsa o'zgarmaydi.
@@ -129,6 +134,13 @@ export function courierText(order: OrderDoc, revealed: boolean): string {
     lines.push('<i>Mijozning ismi va telefoni «Oldim» bosilgach ko‘rinadi.</i>')
   }
 
+  // Buyurtma hali tasdiqlanmagan bo'lsa, kuryer nega tugma yo'qligini
+  // bilib tursin.
+  if (status === 'Yangi') {
+    lines.push('')
+    lines.push('⏳ <i>Admin tasdiqlashini kutmoqda — tasdiqlangach «Oldim» tugmasi chiqadi.</i>')
+  }
+
   if (order.courierName) {
     lines.push('')
     const mark = status === 'Yetkazildi' ? '✅' : '🛵'
@@ -158,6 +170,13 @@ export function courierButtons(order: OrderDoc): Button[] {
   if (map) buttons.push({ text: '🗺 Xaritada ko‘rish', url: map })
 
   if (status === 'Yetkazildi' || status === 'Bekor qilingan' || status === 'Rad etildi') {
+    return buttons
+  }
+
+  // Admin «Qabul qilindi» bosmaguncha kuryer buyurtmani ololmaydi.
+  // Tugma ham ko'rsatilmaydi: admin tasdiqlashi bilan xabar avtomatik
+  // yangilanadi (order.status → syncCourierMessages) va tugma paydo bo'ladi.
+  if (status === 'Yangi') {
     return buttons
   }
 
@@ -285,6 +304,17 @@ export async function handleCourierAction(
       }
 
       if (action === 'take') {
+        // Zaxira tekshiruv: kimdir eski xabardagi tugmani bossa ham
+        // tasdiqlanmagan buyurtma olinmaydi.
+        if (status === 'Yangi') {
+          outcome = {
+            alert: 'Buyurtma hali tasdiqlanmagan. Admin «Qabul qilindi» bosishini kuting.',
+            loud: true,
+            changed: false,
+          }
+          return
+        }
+
         const owner = Number(data.courierId) || 0
         if (owner && owner !== userId) {
           outcome = {
