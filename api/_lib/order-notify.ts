@@ -46,27 +46,33 @@ export const STATUS_EMOJI: Record<string, string> = {
   'Bekor qilingan': '🔴',
 }
 
-/** Status → ilova ichidagi bildirishnoma sarlavhasi va matni. */
-export const STATUS_NOTIF: Record<string, { title: string; body: (id: string) => string }> = {
+/**
+ * Status → ilova ichidagi bildirishnoma.
+ *
+ * `what` — buyurtma raqami emas, TAOM nomi (masalan "Toy oshi va yana
+ * 2 ta taom"). Mijoz uchun "#1015" hech narsa anglatmaydi, taom nomi
+ * esa darhol tanish.
+ */
+export const STATUS_NOTIF: Record<string, { title: string; body: (what: string) => string }> = {
   'Qabul qilindi': {
     title: '✅ Buyurtma qabul qilindi',
-    body: (id) => `Buyurtmangiz ${id} qabul qilindi va tayyorlanmoqda.`,
+    body: (what) => `${what} — tayyorlashni boshladik.`,
   },
   Yetkazilmoqda: {
-    title: "🚚 Buyurtma yo'lda",
-    body: (id) => `Buyurtmangiz ${id} yetkazib berilmoqda — tez orada yetib boradi!`,
+    title: "🚚 Buyurtmangiz yo'lda",
+    body: (what) => `${what} — kuryer yo'lga chiqdi, tez orada yetib boradi!`,
   },
   Yetkazildi: {
     title: '🎉 Buyurtma yetkazildi',
-    body: (id) => `Buyurtmangiz ${id} yetkazildi. Yoqimli ishtaha! Baho qoldirishni unutmang.`,
+    body: (what) => `${what} yetkazildi. Yoqimli ishtaha! Baho qoldirishni unutmang.`,
   },
   'Rad etildi': {
     title: '❌ Buyurtma rad etildi',
-    body: (id) => `Afsuski, buyurtmangiz ${id} rad etildi. Savol bo'lsa biz bilan bog'laning.`,
+    body: (what) => `Afsuski, buyurtmangiz rad etildi (${what}). Savol bo'lsa biz bilan bog'laning.`,
   },
   'Bekor qilingan': {
     title: '🚫 Buyurtma bekor qilindi',
-    body: (id) => `Buyurtmangiz ${id} bekor qilindi.`,
+    body: (what) => `Buyurtmangiz bekor qilindi (${what}).`,
   },
 }
 
@@ -267,25 +273,125 @@ export async function notifyAdminsNewOrder(order: OrderDoc): Promise<number> {
 }
 
 /** Status o'zgarganda mijozga xabar (Telegram + ilova ichida). */
+/** Aloqa telefoni — settings/brand hujjatidan. */
+async function brandPhone(): Promise<string> {
+  try {
+    const snap = await (await adminDb()).collection('settings').doc('brand').get()
+    return snap.exists ? String(snap.data()?.phone || '') : ''
+  } catch {
+    return ''
+  }
+}
+
+/** Taomlar ro'yxati — mijozga ko'rinadigan ko'rinishda. */
+function customerItems(order: OrderDoc): string[] {
+  const items = Array.isArray(order.products) ? order.products : []
+  if (!items.length) return []
+
+  const lines = ['🍽 <b>Buyurtmangiz:</b>']
+  for (const item of items.slice(0, 20)) {
+    const name = item?.product?.name || 'Taom'
+    const qty = Number(item?.quantity) || 1
+    const price = Number(item?.product?.price) || 0
+    lines.push(`  • ${escapeHtml(name)} × ${qty} — ${money(price * qty)}`)
+  }
+  if (items.length > 20) lines.push(`  … va yana ${items.length - 20} ta`)
+  return lines
+}
+
+/**
+ * Har bir status uchun alohida sarlavha va izoh.
+ *
+ * Nega umumiy "buyurtmangiz yangilandi" emas: mijoz uchun buyurtma
+ * raqami hech narsa anglatmaydi. U nima buyurtma qilgani, qancha
+ * to'lashi va endi nima bo'lishini bilishi kerak.
+ */
+const CUSTOMER_STATUS: Record<string, { title: string; note: string }> = {
+  'Qabul qilindi': {
+    title: '✅ <b>Buyurtmangiz qabul qilindi!</b>',
+    note: 'Rahmat! Taomlaringizni tayyorlashni boshladik.',
+  },
+  Yetkazilmoqda: {
+    title: '🛵 <b>Buyurtmangiz yo‘lga chiqdi!</b>',
+    note: 'Kuryerimiz yo‘lda. Iltimos, telefoningizni yoningizda saqlang.',
+  },
+  Yetkazildi: {
+    title: '🎉 <b>Buyurtmangiz yetkazildi!</b>',
+    note: 'Yoqimli ishtaha! Taomlar yoqqan bo‘lsa, ilovada baho qoldiring — bu biz uchun juda muhim.',
+  },
+  'Bekor qilingan': {
+    title: '🚫 <b>Buyurtmangiz bekor qilindi</b>',
+    note: 'Agar bu xato bo‘lsa yoki savolingiz bo‘lsa, biz bilan bog‘laning.',
+  },
+  'Rad etildi': {
+    title: '❌ <b>Buyurtmangiz rad etildi</b>',
+    note: 'Uzr so‘raymiz. Sabab haqida bilish uchun biz bilan bog‘laning.',
+  },
+}
+
+/** Status o'zgarganda mijozga xabar (Telegram + ilova ichida). */
 export async function notifyCustomerStatus(order: OrderDoc, status: string) {
   const userId = Number(order.userId)
   if (!userId) return
 
   const id = displayId(order)
-  const emoji = STATUS_EMOJI[status] || 'ℹ️'
+  const customer = order.customer || {}
+  const info = CUSTOMER_STATUS[status]
+  const cancelled = status === 'Bekor qilingan' || status === 'Rad etildi'
 
-  const text =
-    '📦 <b>Buyurtmangiz yangilandi!</b>\n' +
-    '━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-    `🆔 Buyurtma: <b>${escapeHtml(id)}</b>\n` +
-    `⏰ Yangi status: ${emoji} <b>${escapeHtml(status)}</b>`
+  const lines: string[] = []
+  lines.push(info?.title || `📦 <b>Buyurtmangiz yangilandi</b>`)
+  lines.push('')
+  lines.push(info?.note || `Yangi holat: ${escapeHtml(status)}`)
 
-  await sendMessage(userId, text, miniAppButton())
+  // Taomlar — bekor qilinganda ham ko'rsatamiz, mijoz qaysi buyurtma
+  // ekanini tanishi uchun
+  const items = customerItems(order)
+  if (items.length) {
+    lines.push('')
+    lines.push(...items)
+  }
+
+  if (!cancelled) {
+    lines.push('')
+    lines.push(`💰 <b>Jami: ${money(order.total)}</b>`)
+    if (order.paymentMethod) {
+      const paid = order.paymentMethod === 'Karta' && order.paymentStatus === 'Tolangan'
+      lines.push(`💳 To‘lov: ${escapeHtml(order.paymentMethod)}${paid ? ' — to‘langan' : ''}`)
+    }
+  }
+
+  if ((status === 'Qabul qilindi' || status === 'Yetkazilmoqda') && customer.address) {
+    lines.push('')
+    lines.push(`📍 ${escapeHtml(customer.address)}`)
+  }
+
+  if (cancelled) {
+    const phone = await brandPhone()
+    if (phone) {
+      lines.push('')
+      lines.push(`📞 ${escapeHtml(phone)}`)
+    }
+  }
+
+  lines.push('')
+  lines.push(`<i>Buyurtma ${escapeHtml(id)}</i>`)
+
+  await sendMessage(userId, lines.join('\n'), miniAppButton())
+
+  // Ilova ichidagi bildirishnoma — qisqa, lekin taom nomi bilan
+  const first = order.products?.[0]?.product?.name
+  const count = Array.isArray(order.products) ? order.products.length : 0
+  const what = first
+    ? count > 1
+      ? `${first} va yana ${count - 1} ta taom`
+      : first
+    : `Buyurtmangiz ${id}`
 
   const notif = STATUS_NOTIF[status]
   await pushNotification(
     userId,
     notif?.title || '📦 Buyurtma yangilandi',
-    notif ? notif.body(id) : `Buyurtmangiz ${id} holati o'zgardi: ${status}`,
+    notif ? notif.body(what) : `${what} — holat: ${status}`,
   )
 }
