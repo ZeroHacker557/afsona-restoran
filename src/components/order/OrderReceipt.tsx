@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ShoppingBag, X } from 'lucide-react'
+import { Check, ChevronDown, ShoppingBag, X } from 'lucide-react'
 import { formatPrice } from '../../data'
 import { formatOrderDate } from '../../utils/date'
 import { getImageUrl } from '../../utils/telegram'
@@ -54,15 +54,63 @@ export function OrderReceipt({ order, onClose }: Props) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // Chek uzun bo'lsa, mijoz pastda yana narsa borligini bilishi kerak:
+  // o'ng chekkada holat ko'rsatkichi, pastda esa "pastga suring" ishorasi.
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const [progress, setProgress] = useState(0)
+  const [scrollable, setScrollable] = useState(false)
+  // Ishora abadiy sakrab turmasin — bir necha soniyadan keyin o'zi so'nadi
+  const [hintDone, setHintDone] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setHintDone(true), 6000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const element = overlayRef.current
+    if (!element) return
+
+    const update = () => {
+      const max = element.scrollHeight - element.clientHeight
+      setScrollable(max > 24)
+      setProgress(max > 0 ? Math.min(element.scrollTop / max, 1) : 0)
+    }
+
+    update()
+    element.addEventListener('scroll', update, { passive: true })
+
+    // Rasmlar yuklangach balandlik o'zgaradi — qayta hisoblaymiz
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+
+    return () => {
+      element.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
+  }, [])
+
   const subtotal =
     order.subtotal ??
     order.products.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
 
   return createPortal(
-    <div className="receipt-overlay" role="dialog" aria-modal="true">
+    <div className="receipt-overlay" role="dialog" aria-modal="true" ref={overlayRef}>
       <button className="receipt-close" onClick={onClose} aria-label={t('common.close')}>
         <X size={20} />
       </button>
+
+      {scrollable && (
+        <div className="receipt-scroll" aria-hidden="true">
+          <span style={{ '--p': progress } as React.CSSProperties} />
+        </div>
+      )}
+
+      {scrollable && !hintDone && progress < 0.06 && (
+        <div className="receipt-hint" aria-hidden="true">
+          <ChevronDown size={17} />
+        </div>
+      )}
 
       {/* ── Sarlavha ─────────────────────────────── */}
       <div className="receipt-head">

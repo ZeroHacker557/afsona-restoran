@@ -1009,6 +1009,9 @@ body.receipt-open .bottom-nav { display: none; }
 
 .receipt-close {
   position: absolute;
+  /* Sarlavha bloki DOM'da keyin keladi va uni bosib qo'yardi —
+     yopish tugmasi har doim eng ustida turishi kerak. */
+  z-index: 3;
   top: calc(14px + var(--safe-top));
   right: 16px;
   display: grid;
@@ -1022,6 +1025,52 @@ body.receipt-open .bottom-nav { display: none; }
   transition: background 0.2s ease, transform 0.2s ease;
 }
 .receipt-close:active { transform: scale(0.92); }
+
+/* O'ng chekkadagi holat ko'rsatkichi — chek uzunligini bildiradi */
+.receipt-scroll {
+  position: fixed;
+  top: 26%;
+  bottom: 26%;
+  right: 7px;
+  z-index: 2;
+  width: 4px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.24);
+  pointer-events: none;
+}
+.receipt-scroll span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34%;
+  top: calc(var(--p) * 66%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.9);
+  transition: top 0.12s linear;
+}
+
+/* "Pastga suring" ishorasi — birinchi surilishdan keyin yo'qoladi */
+.receipt-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(255 255 255 / 0.2);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  animation: receiptHint 1.5s ease-in-out infinite;
+}
+
+@keyframes receiptHint {
+  0%, 100% { transform: translate(-50%, 0); opacity: 0.7; }
+  50% { transform: translate(-50%, 7px); opacity: 1; }
+}
 
 /* ── Sarlavha ─────────────────────────────────── */
 
