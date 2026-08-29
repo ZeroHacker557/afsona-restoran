@@ -20,6 +20,8 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import (
     CallbackQuery,
     ChatMemberUpdated,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     KeyboardButton,
     MenuButtonWebApp,
     Message,
@@ -38,15 +40,6 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher(storage=MemoryStorage())
 
-STATUS_EMOJI = {
-    "Yangi": "🆕",
-    "Qabul qilindi": "🟢",
-    "Yetkazilmoqda": "🚚",
-    "Yetkazildi": "🎉",
-    "Rad etildi": "🔴",
-    "Bekor qilingan": "🔴",
-}
-
 RESTAURANT_NAME = "Afsona Restaurant"
 
 
@@ -62,6 +55,20 @@ def main_kb() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="📞 Biz bilan aloqa"), KeyboardButton(text="ℹ️ Yordam")],
         ],
         resize_keyboard=True,
+    )
+
+
+def orders_kb() -> InlineKeyboardMarkup | None:
+    """«Buyurtmalarim» — ilovani to'g'ridan-to'g'ri o'sha bo'limda ochadi."""
+    if not MINI_APP_URL:
+        return None
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="📦 Buyurtmalarim",
+                web_app=WebAppInfo(url=f"{MINI_APP_URL}/?page=orders"),
+            )
+        ]]
     )
 
 
@@ -187,54 +194,26 @@ async def handle_open_catalog(message: Message):
 
 @dp.message(F.text == "📦 Buyurtmalarim")
 async def handle_my_orders(message: Message):
-    orders = db.get_user_orders(message.from_user.id)
+    """
+    Buyurtmalar ro'yxati bot ichida ko'rsatilmaydi.
 
-    if not orders:
-        await message.answer(
-            "📦 <b>Sizda hozircha buyurtmalar mavjud emas.</b>\n\n"
-            "Menyumiz bilan tanishib, o'zingizga yoqqan taomlarni buyurtma qilishingiz mumkin! 🍽"
-        )
-        return
+    Sababi: ilovada ular ancha yaxshi ko'rinadi — rasmlar, holat
+    chizig'i, chek va bekor qilish tugmasi bilan. Bot esa uzun,
+    o'qilmaydigan matn chiqarardi va har safar qayta yuborilardi.
+    """
+    text = (
+        "📦 <b>Buyurtmalarim</b>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "Barcha buyurtmalaringiz ilovada saqlanadi:\n\n"
+        "🔸 Holatini real vaqtda kuzatasiz\n"
+        "🔸 Taomlar, summa va chekni ko'rasiz\n"
+        "🔸 Kerak bo'lsa bekor qilasiz\n"
+        "🔸 Karta bilan to'lasangiz — chekni yuborasiz\n\n"
+        "👇 <i>Ochish uchun tugmani bosing</i>"
+    )
 
-    text = f"📦 <b>Buyurtmalarim</b> ({len(orders)} ta)\n" + "━" * 22 + "\n\n"
+    await message.answer(text, reply_markup=orders_kb())
 
-    for order in orders[:10]:
-        display_id = db.order_display_id(order)
-        total = order.get("total", 0)
-        status = order.get("status", "Yangi")
-        method = order.get("paymentMethod", "Naqd")
-        pay_status = order.get("paymentStatus", "")
-        emoji = STATUS_EMOJI.get(status, "🟡")
-        total_text = db.format_price(total) if isinstance(total, (int, float)) else str(total)
-        date_text = db.order_date_text(order)
-
-        text += f"🧾 <b>Buyurtma:</b> {display_id}\n"
-        if date_text != "—":
-            text += f"📅 <b>Sana:</b> {date_text}\n"
-        text += f"📊 <b>Holat:</b> {emoji} {status}\n"
-
-        if method == "Karta":
-            if pay_status == "Tolangan":
-                text += "💳 <b>To'lov:</b> Karta (✅ Tasdiqlangan)\n"
-            elif pay_status == "Rad etildi":
-                text += "💳 <b>To'lov:</b> Karta (❌ Rad etilgan — ilovadan chekni qayta yuboring)\n"
-            else:
-                text += "💳 <b>To'lov:</b> Karta (⏳ Chek kutilmoqda — ilovadan yuboring)\n"
-        else:
-            text += "💳 <b>To'lov:</b> 💵 Naqd (yetkazganda)\n"
-
-        text += "\n🛍 <b>Taomlar:</b>\n"
-        for index, item in enumerate(order.get("products", []), 1):
-            product = item.get("product") or item
-            text += f"  {index}. {product.get('name', '—')} — <b>{item.get('quantity', 1)} ta</b>\n"
-
-        text += f"\n💰 <b>Jami summa:</b> {total_text}\n"
-        text += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
-    await message.answer(text)
-
-
-# ─── Aloqa va yordam ─────────────────────────────────────────
 
 @dp.message(F.text == "📞 Biz bilan aloqa")
 async def cmd_contact(message: Message):

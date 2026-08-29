@@ -214,65 +214,6 @@ export async function sendOrderLocation(
   return { sent }
 }
 
-/** Yangi buyurtma haqida adminlarga xabar. */
-export async function notifyAdminsNewOrder(order: OrderDoc): Promise<number> {
-  const chatIds = await notifyChatIds()
-  if (!chatIds.length) return 0
-
-  const customer = order.customer || {}
-  const items = Array.isArray(order.products) ? order.products : []
-
-  const lines: string[] = []
-  lines.push('🆕 <b>YANGI BUYURTMA</b>')
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━')
-  lines.push(`🆔 <b>${escapeHtml(displayId(order))}</b>`)
-  lines.push('')
-  lines.push('🛍 <b>Buyurtma:</b>')
-  for (const item of items.slice(0, 30)) {
-    const name = item?.product?.name || 'Taom'
-    const qty = Number(item?.quantity) || 1
-    const price = Number(item?.product?.price) || 0
-    lines.push(`  • ${escapeHtml(name)} × ${qty} — ${money(price * qty)}`)
-  }
-  if (items.length > 30) lines.push(`  … va yana ${items.length - 30} ta`)
-  lines.push('')
-  if (order.discount) lines.push(`🎟 Chegirma: −${money(order.discount)}`)
-  if (order.deliveryFee) lines.push(`🚚 Yetkazish: ${money(order.deliveryFee)}`)
-  lines.push(`💰 <b>Jami: ${money(order.total)}</b>`)
-  lines.push(`💳 To'lov: <b>${escapeHtml(order.paymentMethod || 'Naqd')}</b>`)
-  lines.push('')
-  lines.push(`👤 ${escapeHtml(customer.name || '—')}`)
-  lines.push(`📞 ${escapeHtml(customer.phone || '—')}`)
-  lines.push(`📍 ${escapeHtml(customer.address || '—')}`)
-  if (customer.comment) lines.push(`📝 ${escapeHtml(customer.comment)}`)
-
-  const buttons: Button[] = []
-  const panel = process.env.ADMIN_PANEL_URL
-  if (panel) buttons.push({ text: '🛠 Panelda ochish', url: `${panel}#orders` })
-  if (customer.location?.lat) {
-    buttons.push({
-      text: '🗺 Xaritada ko\u2018rish',
-      url: `https://maps.google.com/?q=${customer.location.lat},${customer.location.lng}`,
-    })
-    // Bosilganda lokatsiya "joylashuv" ko'rinishida keladi, ostida esa
-    // mijoz va taomlar ro'yxati. Buni bot dasturi eshitadi (bot/bot.py),
-    // shuning uchun tugma faqat bot ishlab turganda javob beradi.
-    buttons.push({ text: '📍 Lokatsiyani olish', url: '', callback: `loc:${order.id}` })
-  }
-
-  const text = lines.join('\n')
-  let sent = 0
-  await Promise.all(
-    chatIds.map(async (chatId) => {
-      const result = await sendMessage(chatId, text, buttons)
-      if (result.ok) sent++
-      else console.error(`[notify] admin ${chatId}: ${result.error}`)
-    }),
-  )
-  return sent
-}
-
-/** Status o'zgarganda mijozga xabar (Telegram + ilova ichida). */
 /** Aloqa telefoni — settings/brand hujjatidan. */
 async function brandPhone(): Promise<string> {
   try {

@@ -45,9 +45,24 @@ function loadCart(): CartItems {
   } catch { return {} }
 }
 
+/** Havoladagi ?page= qiymati — faqat ruxsat etilgan bo'limlar. */
+const START_PAGES: AppPage[] = ['home', 'catalog', 'favorites', 'orders', 'profile']
+
+function readStartPage(): AppPage {
+  try {
+    const value = new URLSearchParams(window.location.search).get('page') as AppPage | null
+    return value && START_PAGES.includes(value) ? value : 'home'
+  } catch {
+    return 'home'
+  }
+}
+
+
 export function useShopStore() {
   const t = useT()
-  const [page, setPage] = useState<AppPage>('home')
+  // Bot «Buyurtmalarim» tugmasi ilovani to'g'ridan-to'g'ri o'sha
+  // bo'limda ochadi: MINI_APP_URL/?page=orders
+  const [page, setPage] = useState<AppPage>(readStartPage)
   // Telegram BackButton shu tarix bo'yicha ishlaydi (D-03)
   const [history, setHistory] = useState<AppPage[]>([])
   // Bosh sahifadan tanlangan kategoriya katalogga uzatiladi (F-16)
