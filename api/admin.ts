@@ -16,6 +16,13 @@ import {
   readCourierSettings,
   syncCourierMessages,
 } from './_lib/courier.js'
+import {
+  bindChannel,
+  deleteChannelPost,
+  expireChannelPost,
+  sendChannelPost,
+  unbindChannel,
+} from './_lib/channel.js'
 import { escapeHtml, sendAny, sendMessage } from './_lib/telegram.js'
 import {
   displayId,
@@ -70,6 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Bular bot dasturidan keladi — Firebase Auth emas, maxfiy kalit bilan
     if (action === 'courier.action') return await handleCourierButton(req, res)
     if (action === 'courier.group') return await handleCourierGroup(req, res)
+    if (action === 'channel.bind') return await handleChannelBind(req, res)
 
     const admin = await requireAdmin(req, res)
     if (!admin) return
@@ -99,6 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return await handleOrderDelete(req, res)
       case 'notify.user':
         return await handleNotifyUser(req, res)
+      case 'channel.post':
+        return await handleChannelPost(req, res)
+      case 'channel.expire':
+        return await handleChannelExpire(req, res)
+      case 'channel.delete':
+        return await handleChannelDelete(req, res)
+      case 'channel.unbind':
+        return await handleChannelUnbind(res)
       default:
         return fail(res, 400, `Noma‘lum action: ${action}`)
     }
@@ -593,4 +609,82 @@ async function handleCourierGroup(req: VercelRequest, res: VercelResponse) {
 
   const text = await bindGroup(chatId, String(body?.title || ''))
   return res.status(200).json({ ok: true, text })
+}
+
+// ── Kanal ────────────────────────────────────────────────────
+
+/**
+ * Bot kanalga administrator qilib qo'shilganda bot shu yerga xabar
+ * beradi. Admin hech qanday buyruq yozmaydi — kanal o'zi biriktiriladi.
+ */
+async function handleChannelBind(req: VercelRequest, res: VercelResponse) {
+  if (!isBotRequest(req)) return fail(res, 403, 'Ruxsat yo‘q')
+
+  const body = req.body as {
+    chatId?: number | string
+    title?: string
+    username?: string
+    userId?: number | string
+  }
+  const chatId = Number(body?.chatId)
+  const userId = Number(body?.userId)
+
+  if (!Number.isFinite(chatId) || chatId === 0) return fail(res, 400, 'Kanal noto‘g‘ri')
+
+  // Kanalni faqat panel adminlari biriktira oladi
+  const admins = await notifyChatIds()
+  if (admins.length && !admins.includes(userId)) {
+    return res.status(200).json({ ok: false, error: 'Ruxsat yo‘q' })
+  }
+
+  await bindChannel(chatId, String(body?.title || ''), String(body?.username || ''))
+  return res.status(200).json({ ok: true })
+}
+
+async function handleChannelPost(req: VercelRequest, res: VercelResponse) {
+  const body = req.body as {
+    text?: string
+    photoUrl?: string
+    videoUrl?: string
+    buttonText?: string
+    buttonUrl?: string
+    silent?: boolean
+    productId?: string
+  }
+
+  const result = await sendChannelPost({
+    text: String(body?.text || ''),
+    photoUrl: body?.photoUrl ? String(body.photoUrl) : undefined,
+    videoUrl: body?.videoUrl ? String(body.videoUrl) : undefined,
+    buttonText: body?.buttonText ? String(body.buttonText) : undefined,
+    buttonUrl: body?.buttonUrl ? String(body.buttonUrl) : undefined,
+    silent: Boolean(body?.silent),
+    productId: body?.productId ? String(body.productId) : undefined,
+  })
+
+  if (!result.ok) return fail(res, 400, result.error || 'Yuborilmadi')
+  return res.status(200).json(result)
+}
+
+async function handleChannelExpire(req: VercelRequest, res: VercelResponse) {
+  const postId = String((req.body as { postId?: string })?.postId || '')
+  if (!postId) return fail(res, 400, 'Post ko‘rsatilmagan')
+
+  const result = await expireChannelPost(postId)
+  if (!result.ok) return fail(res, 400, result.error || 'Bajarilmadi')
+  return res.status(200).json(result)
+}
+
+async function handleChannelDelete(req: VercelRequest, res: VercelResponse) {
+  const postId = String((req.body as { postId?: string })?.postId || '')
+  if (!postId) return fail(res, 400, 'Post ko‘rsatilmagan')
+
+  const result = await deleteChannelPost(postId)
+  if (!result.ok) return fail(res, 400, result.error || 'Bajarilmadi')
+  return res.status(200).json(result)
+}
+
+async function handleChannelUnbind(res: VercelResponse) {
+  await unbindChannel()
+  return res.status(200).json({ ok: true })
 }

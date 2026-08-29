@@ -19,6 +19,7 @@ import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import (
     CallbackQuery,
+    ChatMemberUpdated,
     KeyboardButton,
     MenuButtonWebApp,
     Message,
@@ -345,6 +346,40 @@ async def cmd_bind_group(message: Message):
         result.get("text")
         or "Guruhni biriktirib bo'lmadi. Internet va sozlamalarni tekshiring."
     )
+
+
+# ─── Kanal biriktirish ────────────────────────────────────────
+#
+# Kanallarda buyruqlar botga yetib bormaydi, shuning uchun `/kanal` deb
+# yozib bo'lmaydi. Buning o'rniga Telegram botning kanaldagi maqomi
+# o'zgarganda `my_chat_member` yangilanishini yuboradi — botni
+# administrator qilib qo'shish kifoya, qolganini o'zi hal qiladi.
+
+
+@dp.my_chat_member()
+async def on_my_status_changed(event: ChatMemberUpdated):
+    chat = event.chat
+    if chat.type != "channel":
+        return
+
+    status = event.new_chat_member.status
+    if status != "administrator":
+        return
+
+    result = await _api(
+        "channel.bind",
+        {
+            "chatId": chat.id,
+            "title": chat.title or "",
+            "username": chat.username or "",
+            "userId": event.from_user.id if event.from_user else 0,
+        },
+    )
+
+    if result.get("ok"):
+        logger.info(f"[KANAL] biriktirildi: {chat.title} ({chat.id})")
+    else:
+        logger.warning(f"[KANAL] biriktirilmadi: {result.get('error') or 'javob yo‘q'}")
 
 
 # ─── Main ─────────────────────────────────────────────────────

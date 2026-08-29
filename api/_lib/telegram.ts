@@ -90,23 +90,37 @@ export function sendMessage(chatId: number | string, text: string, buttons?: But
   })
 }
 
-export function sendPhoto(chatId: number | string, photo: string, caption?: string, buttons?: Button[]) {
+export function sendPhoto(
+  chatId: number | string,
+  photo: string,
+  caption?: string,
+  buttons?: Button[],
+  silent?: boolean,
+) {
   return call('sendPhoto', {
     chat_id: chatId,
     photo,
     caption: caption || undefined,
     parse_mode: 'HTML',
     reply_markup: markup(buttons),
+    disable_notification: silent || undefined,
   })
 }
 
-export function sendVideo(chatId: number | string, video: string, caption?: string, buttons?: Button[]) {
+export function sendVideo(
+  chatId: number | string,
+  video: string,
+  caption?: string,
+  buttons?: Button[],
+  silent?: boolean,
+) {
   return call('sendVideo', {
     chat_id: chatId,
     video,
     caption: caption || undefined,
     parse_mode: 'HTML',
     reply_markup: markup(buttons),
+    disable_notification: silent || undefined,
   })
 }
 
@@ -139,6 +153,27 @@ export function editMessageText(
     disable_web_page_preview: true,
     reply_markup: markup(buttons),
   })
+}
+
+/** Rasm/video ostidagi izohni tahrirlaydi (matnli xabar uchun emas). */
+export function editMessageCaption(
+  chatId: number | string,
+  messageId: number,
+  caption: string,
+  buttons?: Button[],
+) {
+  return call('editMessageCaption', {
+    chat_id: chatId,
+    message_id: messageId,
+    caption,
+    parse_mode: 'HTML',
+    reply_markup: markup(buttons),
+  })
+}
+
+/** Xabarni o'chiradi. Kanal postlari uchun ham ishlaydi. */
+export function deleteMessage(chatId: number | string, messageId: number) {
+  return call('deleteMessage', { chat_id: chatId, message_id: messageId })
 }
 
 /**

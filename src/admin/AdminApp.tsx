@@ -16,6 +16,7 @@ import {
   UtensilsCrossed,
   Users,
   Bike,
+  Radio,
 } from 'lucide-react'
 import { claimAdmin, onAdminAuthChanged, signOutAdmin } from './lib/auth'
 import { AdminDataProvider } from './store'
@@ -31,6 +32,7 @@ import { CustomersPage } from './pages/CustomersPage'
 import { StatsPage } from './pages/StatsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { CouriersPage } from './pages/CouriersPage'
+import { ChannelPage } from './pages/ChannelPage'
 import { AdminsPage } from './pages/AdminsPage'
 import { ToastHost } from './components/Toast'
 import { toast } from './lib/toast'
@@ -42,7 +44,7 @@ import { saveSetting } from './lib/db'
 
 type Route =
   | 'dashboard' | 'orders' | 'products' | 'categories' | 'promos'
-  | 'broadcast' | 'customers' | 'stats' | 'settings' | 'couriers' | 'admins'
+  | 'broadcast' | 'customers' | 'stats' | 'settings' | 'couriers' | 'channel' | 'admins'
 
 const NAV: { id: Route; label: string; icon: typeof LayoutDashboard; group?: string }[] = [
   { id: 'dashboard', label: 'Bosh sahifa', icon: LayoutDashboard },
@@ -52,6 +54,7 @@ const NAV: { id: Route; label: string; icon: typeof LayoutDashboard; group?: str
   { id: 'promos', label: 'Promokodlar', icon: Ticket },
   { id: 'couriers', label: 'Kuryerlar', icon: Bike },
   { id: 'broadcast', label: 'Xabarnoma', icon: Megaphone, group: 'Mijozlar' },
+  { id: 'channel', label: 'Kanal', icon: Radio },
   { id: 'customers', label: 'Mijozlar', icon: Users },
   { id: 'stats', label: 'Statistika', icon: BarChart3, group: 'Boshqaruv' },
   { id: 'settings', label: 'Sozlamalar', icon: Settings },
@@ -69,6 +72,7 @@ const TITLES: Record<Route, string> = {
   stats: 'Statistika',
   settings: 'Sozlamalar',
   couriers: 'Kuryerlar',
+  channel: 'Kanal',
   admins: 'Adminlar',
 }
 
@@ -276,6 +280,7 @@ function Shell({ email }: { email: string }) {
           {route === 'stats' && <StatsPage />}
           {route === 'settings' && <SettingsPage />}
           {route === 'couriers' && <CouriersPage />}
+          {route === 'channel' && <ChannelPage />}
           {route === 'admins' && <AdminsPage />}
         </div>
       </div>

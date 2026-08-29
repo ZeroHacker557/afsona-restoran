@@ -459,6 +459,54 @@ export const readCouriers = (data?: Record<string, unknown>): CourierSettings =>
   }
 }
 
+// ── Kanal ────────────────────────────────────────────────────
+
+export type ChannelSettings = { chatId: number | null; title: string; username: string }
+
+export const readChannel = (data?: Record<string, unknown>): ChannelSettings => {
+  const chatId = num(data?.chatId)
+  return {
+    chatId: chatId === 0 ? null : chatId,
+    title: str(data?.title),
+    username: str(data?.username),
+  }
+}
+
+export type ChannelPost = {
+  id: string
+  text: string
+  photoUrl?: string | null
+  videoUrl?: string | null
+  buttonText?: string | null
+  expired: boolean
+  createdAt: string
+}
+
+export function watchChannelPosts(
+  onData: (items: ChannelPost[]) => void,
+  onError?: (e: unknown) => void,
+) {
+  return watch<ChannelPost>(
+    'channelPosts',
+    (id, data) => ({
+      id,
+      text: str(data.text),
+      photoUrl: data.photoUrl == null ? null : str(data.photoUrl),
+      videoUrl: data.videoUrl == null ? null : str(data.videoUrl),
+      buttonText: data.buttonText == null ? null : str(data.buttonText),
+      expired: data.expired === true,
+      createdAt: str(data.createdAt),
+    }),
+    (items) =>
+      onData(
+        items
+          .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))
+          .slice(0, 40),
+      ),
+    onError,
+  )
+}
+
 export function saveSetting(docId: string, value: Record<string, unknown>) {
   return setDoc(doc(db, 'settings', docId), value, { merge: true })
 }
