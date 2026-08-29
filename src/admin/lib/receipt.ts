@@ -117,26 +117,6 @@ export function buildReceiptHtml(order: AdminOrder): string {
     -webkit-font-smoothing: none;
   }
 
-  /* Ekranda ko'rinadigan boshqaruv — chop etishda yo'qoladi */
-  .bar {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    margin-bottom: 14px;
-    font-family: system-ui, sans-serif;
-  }
-  .bar button {
-    padding: 7px 14px;
-    border: 1px solid #000;
-    border-radius: 4px;
-    background: #000;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .bar button.ghost { background: #fff; color: #000; }
-
   header { text-align: center; }
   .brand {
     font-size: 17px;
@@ -154,7 +134,6 @@ export function buildReceiptHtml(order: AdminOrder): string {
     margin: 8px 0 2px;
   }
   .when { text-align: center; font-size: 11px; }
-  .status { text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
 
   .sep { border-top: 1px dashed #000; margin: 9px 0; }
   .sep.solid { border-top: 2px solid #000; margin: 8px 0; }
@@ -191,17 +170,11 @@ export function buildReceiptHtml(order: AdminOrder): string {
   .cut { text-align: center; margin-top: 10px; letter-spacing: 2px; }
 
   @media print {
-    .bar { display: none; }
     body { width: auto; padding: 0; }
   }
 </style>
 </head>
 <body>
-
-<div class="bar">
-  <button onclick="window.print()">Chop etish</button>
-  <button class="ghost" onclick="window.close()">Yopish</button>
-</div>
 
 <header>
   <div class="brand">${escapeHtml(BRAND.name)} ${escapeHtml(BRAND.nameSuffix)}</div>
@@ -210,7 +183,6 @@ export function buildReceiptHtml(order: AdminOrder): string {
 
 <div class="number">${escapeHtml(order.orderNumber)}</div>
 <div class="when">${escapeHtml(formatDateTime(order.createdAt))}</div>
-<div class="status">${escapeHtml(order.status)}</div>
 
 <div class="sep"></div>
 ${items}
