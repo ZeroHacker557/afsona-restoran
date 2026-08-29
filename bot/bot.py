@@ -29,6 +29,7 @@ from aiogram.types import (
     WebAppInfo,
 )
 from aiogram.client.default import DefaultBotProperties
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import API_BASE_URL, BOT_API_SECRET, BOT_TOKEN, MINI_APP_URL
@@ -56,6 +57,52 @@ def main_kb() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
     )
+
+
+# ─── Premium (custom) emoji ───────────────────────────────────
+#
+# Telegram HTML rejimida maxsus emoji shunday yoziladi:
+#   <tg-emoji emoji-id="123">🍽</tg-emoji>
+# Ichidagi oddiy emoji — zaxira: maxsus emoji ko'rsatilmasa o'sha chiqadi.
+#
+# DIQQAT: Telegram bunday emojini faqat Fragment'da qo'shimcha username
+# sotib olgan botlarga ruxsat beradi. Aks holda so'rov xato bilan
+# qaytadi — shuning uchun quyida oddiy variantga qaytish (fallback) bor.
+
+CUSTOM_EMOJI = {
+    "menu": "5233237686751355290",
+    "bullet": "5337006433084912502",
+    "point": "5411322793373477644",
+}
+
+# Bir marta rad javobi kelsa, keyin qayta urinilmaydi
+_custom_emoji_ok = True
+
+
+def ce(key: str, fallback: str, rich: bool = True) -> str:
+    """Maxsus emoji yoki oddiysi."""
+    emoji_id = CUSTOM_EMOJI.get(key)
+    if not rich or not emoji_id:
+        return fallback
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+
+
+async def answer_rich(message: Message, build, **kwargs):
+    """
+    Matnni avval maxsus emoji bilan yuboradi. Telegram rad etsa —
+    oddiy emoji bilan qayta yuboradi va keyingi safar urinmaydi.
+    """
+    global _custom_emoji_ok
+
+    if _custom_emoji_ok:
+        try:
+            await message.answer(build(True), **kwargs)
+            return
+        except TelegramBadRequest as e:
+            _custom_emoji_ok = False
+            logger.warning(f"[EMOJI] maxsus emoji ishlamadi, oddiysiga o'tildi: {e}")
+
+    await message.answer(build(False), **kwargs)
 
 
 def app_kb(text: str, page: str = "") -> InlineKeyboardMarkup | None:
@@ -178,16 +225,24 @@ async def handle_contact(message: Message):
 
 # ─── Menyu ───────────────────────────────────────────────────
 
+def menu_text(rich: bool) -> str:
+    dot = ce("bullet", "🔸", rich)
+    return (
+        "{} <b>MENYU</b>\n".format(ce("menu", "🍽", rich))
+        + "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        + "Barcha taomlarimiz rasmlari va narxlari bilan ilovada.\n\n"
+        + f"{dot} Kategoriyalar bo'yicha tanlaysiz\n"
+        + f"{dot} Savatga qo'shib, bir necha bosishda buyurtma berasiz\n"
+        + f"{dot} Manzilni xaritadan belgilaysiz\n\n"
+        + "{} <i>Ochish uchun tugmani bosing</i>".format(ce("point", "👇", rich))
+    )
+
+
 @dp.message(F.text == "🍽 Menyu")
 async def handle_open_catalog(message: Message):
-    await message.answer(
-        "🍽 <b>MENYU</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Barcha taomlarimiz rasmlari va narxlari bilan ilovada.\n\n"
-        "🔸 Kategoriyalar bo'yicha tanlaysiz\n"
-        "🔸 Savatga qo'shib, bir necha bosishda buyurtma berasiz\n"
-        "🔸 Manzilni xaritadan belgilaysiz\n\n"
-        "👇 <i>Ochish uchun tugmani bosing</i>",
+    await answer_rich(
+        message,
+        menu_text,
         reply_markup=app_kb("🍽 Menyuni ochish", "catalog"),
     )
 
