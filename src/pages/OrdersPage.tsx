@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { ChevronDown, Camera, Loader2, ShoppingBag, SlidersHorizontal, X } from 'lucide-react'
+import { ChevronDown, Camera, Loader2, Receipt, ShoppingBag, SlidersHorizontal, X } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl } from '../utils/telegram'
 import { formatOrderDate } from '../utils/date'
@@ -7,6 +7,7 @@ import { apiPost, ApiError } from '../lib/api'
 import { sendReceipt } from '../lib/receipt'
 import { hapticSuccess, hapticError } from '../utils/telegram'
 import { PageHeader } from '../components/layout/PageHeader'
+import { OrderReceipt } from '../components/order/OrderReceipt'
 import { useT, type TranslationKey } from '../i18n'
 import type { Order, OrderStatus } from '../types/domain'
 const TABS: { id: string; labelKey: TranslationKey }[] = [
@@ -45,6 +46,8 @@ export function OrdersPage({
   const [active, setActive] = useState('all')
   const [newest, setNewest] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // Ochilgan chek — mijozga ko'rinadigan to'liq ekranli ko'rinish
+  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   // Chek yuklash: bitta yashirin <input> hammasiga xizmat qiladi
   const receiptInput = useRef<HTMLInputElement>(null)
@@ -223,6 +226,19 @@ export function OrdersPage({
                       </div>
                     </div>
                   ))}
+
+                  <button
+                    onClick={() => setReceiptOrder(order)}
+                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition active:scale-95"
+                    style={{
+                      background: 'var(--brand-soft)',
+                      color: 'var(--brand)',
+                      border: '1px solid var(--brand-line)',
+                    }}
+                  >
+                    <Receipt size={16} />
+                    {t('receipt.view')}
+                  </button>
                 </div>
               )}
 
@@ -321,6 +337,10 @@ export function OrdersPage({
           onChange={(event) => handleReceipt(event.target.files?.[0])}
         />
       </section>
+
+      {receiptOrder && (
+        <OrderReceipt order={receiptOrder} onClose={() => setReceiptOrder(null)} />
+      )}
     </>
   )
 }
