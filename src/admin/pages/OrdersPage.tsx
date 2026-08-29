@@ -19,6 +19,7 @@ import { Modal } from '../components/Modal'
 import { Chip, ConfirmBar, Empty, Spinner } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { formatDateTime, money, timeAgo } from '../lib/format'
+import { buildReceiptHtml } from '../lib/receipt'
 import type { AdminOrder } from '../lib/db'
 import { ALL_STATUSES, ORDER_FLOW as FLOW, STATUS_STYLE } from '../lib/status'
 import { useNow } from '../lib/now'
@@ -556,47 +557,13 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: stri
   )
 }
 
-/** Oshxona/kuryer uchun chek — alohida oynada chop etiladi. */
+/** Oshxona/kuryer uchun chek — alohida oynada ochilib chop etiladi. */
 function printOrder(order: AdminOrder) {
-  const rows = order.products
-    .map(
-      (item) =>
-        `<tr><td>${escapeHtml(item.product?.name || '')}</td><td style="text-align:center">${item.quantity}</td><td style="text-align:right">${money(
-          (Number(item.product?.price) || 0) * (Number(item.quantity) || 0),
-        )}</td></tr>`,
-    )
-    .join('')
-
-  const html = `<!doctype html><html lang="uz"><head><meta charset="utf-8">
-<title>${order.orderNumber}</title>
-<style>
-  body { font-family: system-ui, sans-serif; padding: 18px; max-width: 380px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-  td, th { padding: 5px 0; border-bottom: 1px dashed #ccc; }
-  .total { font-size: 16px; font-weight: 800; margin-top: 10px; display:flex; justify-content:space-between; }
-  .muted { color: #666; font-size: 12px; }
-</style></head><body>
-  <h1>${order.orderNumber}</h1>
-  <div class="muted">${formatDateTime(order.createdAt)}</div>
-  <div class="muted">${escapeHtml(order.customer?.name || '')} · ${escapeHtml(order.customer?.phone || '')}</div>
-  <div class="muted">${escapeHtml(order.customer?.address || '')}</div>
-  ${order.customer?.comment ? `<div class="muted">Izoh: ${escapeHtml(order.customer.comment)}</div>` : ''}
-  <table><tbody>${rows}</tbody></table>
-  <div class="total"><span>Jami</span><span>${money(order.total)}</span></div>
-  <div class="muted">To'lov: ${escapeHtml(order.paymentMethod || '')}</div>
-  <script>window.onload = () => { window.print(); }</script>
-</body></html>`
-
-  const win = window.open('', '_blank', 'width=420,height=640')
+  const win = window.open('', '_blank', 'width=400,height=720')
   if (!win) {
     toast('Brauzer yangi oynani bloklab qo‘ydi', 'error')
     return
   }
-  win.document.write(html)
+  win.document.write(buildReceiptHtml(order))
   win.document.close()
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
