@@ -81,6 +81,16 @@ export function useShopStore() {
   const [checkoutDone, setCheckoutDone] = useState(false)
   const [isSubmitting, setSubmitting] = useState(false)
   const [authReady, setAuthReady] = useState(false)
+  /*
+   * "Yuklanmoqda" bilan "haqiqatan bo'sh" ni ajratish uchun.
+   *
+   * `authReady` faqat kirish tugaganini bildiradi — Firestore esa birinchi
+   * javobini keyinroq beradi. Oradagi bir necha yuz millisekundda ro'yxat
+   * bo'm-bo'sh bo'ladi va ekranda "buyurtmalar yo'q" chaqnab o'tadi.
+   * Foydalanuvchida "ma'lumotim yo'qoldi" degan taassurot qoladi.
+   */
+  const [ordersLoaded, setOrdersLoaded] = useState(false)
+  const [notificationsLoaded, setNotificationsLoaded] = useState(false)
   const [theme, setThemeState] = useState<ThemeMode>(getStoredTheme)
   // Bitta rasmiylashtirish uchun bitta kalit. Xato bo'lsa saqlanadi —
   // qayta urinishda server yangi buyurtma yaratmaydi.
@@ -154,20 +164,29 @@ export function useShopStore() {
         setMyOrders([])
         setNotifications([])
         setUnreadNotificationsCount(0)
+        // Kirilmagan — kutadigan narsa yo'q, "bo'sh" ko'rsatish to'g'ri
+        setOrdersLoaded(true)
+        setNotificationsLoaded(true)
         return
       }
 
       const userId = Number(user.uid)
       setAuthReady(true)
       setAuthenticated(true)
+      setOrdersLoaded(false)
+      setNotificationsLoaded(false)
 
-      unsubOrders = subscribeToUserOrders(userId, setMyOrders)
+      unsubOrders = subscribeToUserOrders(userId, (orders) => {
+        setMyOrders(orders)
+        setOrdersLoaded(true)
+      })
       unsubProfile = subscribeToUserProfile(userId, (profile) => {
         if (profile) setUserProfile(profile as UserProfile)
       })
       unsubNotifications = subscribeToUserNotifications(userId, (notifs) => {
         setNotifications(notifs)
         setUnreadNotificationsCount(notifs.filter((n: Notification) => !n.read).length)
+        setNotificationsLoaded(true)
       })
     })
 
@@ -461,8 +480,8 @@ export function useShopStore() {
     cartItems, cartCount, cartTotal, cartProducts,
     likedIds, selectedProduct,
     isSearchOpen, isCartOpen, query, searchResults, toast,
-    myOrders, checkoutDone, closeCheckoutSuccess, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
-    notifications, unreadNotificationsCount,
+    myOrders, ordersLoaded, checkoutDone, closeCheckoutSuccess, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,
+    notifications, notificationsLoaded, unreadNotificationsCount,
     hours, openState: getOpenState(hours),
     closedNotice, dismissClosedNotice: () => setClosedNotice(null),
     catalogCategory, openCategory,

@@ -151,6 +151,7 @@ function App() {
             <div className="page-animate">
               <FavoritesPage
                 products={shop.products}
+                loading={shop.loading}
                 {...productActions}
                 cartCount={shop.cartCount}
                 onOpenCart={shop.openCart}
@@ -163,6 +164,7 @@ function App() {
             <div className="page-animate">
               <OrdersPage
                 orders={shop.myOrders}
+                ordersLoaded={shop.ordersLoaded}
                 authReady={shop.authReady}
                 isAuthenticated={shop.isAuthenticated}
                 cartCount={shop.cartCount}
@@ -179,6 +181,7 @@ function App() {
               <ProfilePage
                 profile={shop.userProfile}
                 orders={shop.myOrders}
+                ordersLoaded={shop.ordersLoaded}
                 theme={shop.theme}
                 onToggleTheme={shop.toggleTheme}
                 onNavigate={shop.navigate}
@@ -247,7 +250,11 @@ function App() {
 
           {shop.page === 'notifications' && (
             <div className="page-animate">
-              <NotificationsPage notifications={shop.notifications} onBack={shop.goBack} />
+              <NotificationsPage
+                notifications={shop.notifications}
+                loaded={shop.notificationsLoaded}
+                onBack={shop.goBack}
+              />
             </div>
           )}
 

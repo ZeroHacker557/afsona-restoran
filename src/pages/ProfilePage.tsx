@@ -20,13 +20,15 @@ type Option = {
 type Props = {
   profile: UserProfile | null
   orders: Order[]
+  /** Buyurtmalar hali kelmagan bo'lsa, 0 emas — skelet ko'rsatiladi. */
+  ordersLoaded: boolean
   theme: ThemeMode
   onToggleTheme: () => void
   onNavigate: (page: AppPage) => void
   onNotify: (msg: string) => void
 }
 
-export function ProfilePage({ profile, orders, theme, onToggleTheme, onNavigate, onNotify }: Props) {
+export function ProfilePage({ profile, orders, ordersLoaded, theme, onToggleTheme, onNavigate, onNotify }: Props) {
   const { t, lang } = useI18n()
   const tgUser = getTelegramUser()
 
@@ -108,7 +110,11 @@ export function ProfilePage({ profile, orders, theme, onToggleTheme, onNavigate,
             className="rounded-2xl border p-4 text-center"
             style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}
           >
-            <p className="text-2xl font-extrabold" style={{ color: 'var(--brand)' }}>{value}</p>
+            {ordersLoaded ? (
+              <p className="text-2xl font-extrabold" style={{ color: 'var(--brand)' }}>{value}</p>
+            ) : (
+              <span className="skeleton mx-auto block h-7 w-8" />
+            )}
             <p className="mt-1 text-xs font-bold" style={{ color: 'var(--muted)' }}>{label}</p>
           </div>
         ))}

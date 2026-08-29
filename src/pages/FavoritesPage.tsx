@@ -1,6 +1,7 @@
 import { Heart } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { ProductCard } from '../components/product/ProductCard'
+import { ProductGridSkeleton } from '../components/ui/ProductCardSkeleton'
 import { useT } from '../i18n'
 import type { Product, ProductActions } from '../types/domain'
 
@@ -9,9 +10,11 @@ type Props = ProductActions & {
   cartCount: number
   onOpenCart: () => void
   onGoToCatalog: () => void
+  /** Taomlar hali yuklanmagan bo'lsa "sevimlilar yo'q" ko'rsatilmaydi. */
+  loading: boolean
 }
 
-export function FavoritesPage({ products, cartCount, likedIds, onOpenCart, onGoToCatalog, ...actions }: Props) {
+export function FavoritesPage({ products, cartCount, likedIds, loading, onOpenCart, onGoToCatalog, ...actions }: Props) {
   const t = useT()
   const favorites = products.filter((p) => likedIds.includes(p.id))
 
@@ -19,9 +22,17 @@ export function FavoritesPage({ products, cartCount, likedIds, onOpenCart, onGoT
     <>
       <PageHeader title={t('favorites.title')} cartCount={cartCount} onCart={onOpenCart} />
       <section className="px-5 pb-32 pt-6 sm:px-10">
-        <p style={{ color: 'var(--muted)' }}>{t('catalog.total', { count: favorites.length })}</p>
+        {loading ? (
+          <span className="skeleton block h-5 w-32" />
+        ) : (
+          <p style={{ color: 'var(--muted)' }}>{t('catalog.total', { count: favorites.length })}</p>
+        )}
 
-        {favorites.length > 0 ? (
+        {loading ? (
+          <div className="mt-6">
+            <ProductGridSkeleton count={likedIds.length || 4} />
+          </div>
+        ) : favorites.length > 0 ? (
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {favorites.map((product) => (
               <ProductCard key={product.id} product={product} likedIds={likedIds} {...actions} />

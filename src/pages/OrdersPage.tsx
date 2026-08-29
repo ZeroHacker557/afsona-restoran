@@ -8,6 +8,7 @@ import { sendReceipt } from '../lib/receipt'
 import { hapticSuccess, hapticError } from '../utils/telegram'
 import { PageHeader } from '../components/layout/PageHeader'
 import { OrderReceipt } from '../components/order/OrderReceipt'
+import { OrderListSkeleton } from '../components/ui/ListSkeleton'
 import { useT, type TranslationKey } from '../i18n'
 import type { Order, OrderStatus } from '../types/domain'
 const TABS: { id: string; labelKey: TranslationKey }[] = [
@@ -27,6 +28,8 @@ function statusColor(status: string): string {
 
 type Props = {
   orders: Order[]
+  /** Firestore birinchi javobini berdimi. Busiz "bo'sh" chaqnab o'tadi. */
+  ordersLoaded: boolean
   authReady: boolean
   isAuthenticated: boolean
   cartCount: number
@@ -40,7 +43,7 @@ type Props = {
 const CANCELLABLE: OrderStatus[] = ['Yangi', 'Qabul qilindi']
 
 export function OrdersPage({
-  orders, authReady, isAuthenticated, cartCount, onSearch, onOpenCart, onGoToCatalog, onNotify,
+  orders, ordersLoaded, authReady, isAuthenticated, cartCount, onSearch, onOpenCart, onGoToCatalog, onNotify,
 }: Props) {
   const t = useT()
   const [active, setActive] = useState('all')
@@ -283,15 +286,7 @@ export function OrdersPage({
           )
         })}
 
-        {!authReady && (
-          <div className="flex flex-col items-center py-20 text-center">
-            <div
-              className="size-8 animate-spin rounded-full border-4"
-              style={{ borderColor: 'var(--brand-soft)', borderTopColor: 'var(--brand)' }}
-            />
-            <p className="mt-4 text-sm" style={{ color: 'var(--muted)' }}>{t('common.loading')}</p>
-          </div>
-        )}
+        {(!authReady || (isAuthenticated && !ordersLoaded)) && <OrderListSkeleton />}
 
         {authReady && !isAuthenticated && (
           <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.4s ease' }}>
@@ -308,7 +303,7 @@ export function OrdersPage({
           </div>
         )}
 
-        {authReady && isAuthenticated && !shown.length && (
+        {authReady && isAuthenticated && ordersLoaded && !shown.length && (
           <div className="flex flex-col items-center py-20 text-center" style={{ animation: 'fadeInUp 0.4s ease' }}>
             <span
               className="grid size-20 place-items-center rounded-full"

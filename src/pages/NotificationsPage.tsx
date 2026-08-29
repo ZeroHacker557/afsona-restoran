@@ -1,10 +1,13 @@
 import { ArrowLeft, Bell, BellRing, Info, Package, Tag } from 'lucide-react'
 import { formatDateTime } from '../utils/date'
 import { useT } from '../i18n'
+import { NotificationListSkeleton } from '../components/ui/ListSkeleton'
 import type { Notification } from '../types/domain'
 
 type Props = {
   notifications: Notification[]
+  /** Firestore birinchi javobini berdimi. */
+  loaded: boolean
   onBack: () => void
 }
 
@@ -14,7 +17,7 @@ const STYLES = {
   system: { Icon: Info, color: 'var(--warning)', bg: 'var(--warning-soft)' },
 } as const
 
-export function NotificationsPage({ notifications, onBack }: Props) {
+export function NotificationsPage({ notifications, loaded, onBack }: Props) {
   const t = useT()
 
   return (
@@ -29,7 +32,9 @@ export function NotificationsPage({ notifications, onBack }: Props) {
       </header>
 
       <div className="px-5 pb-32 pt-6 sm:px-10 page-animate">
-        {notifications.length === 0 ? (
+        {!loaded ? (
+          <NotificationListSkeleton />
+        ) : notifications.length === 0 ? (
           <div className="mt-20 flex flex-col items-center justify-center text-center">
             <div
               className="grid size-20 place-items-center rounded-full"
