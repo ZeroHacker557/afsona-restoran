@@ -7,6 +7,7 @@ o'qiladi — kodda token va karta raqami saqlanmaydi. Namuna: `.env.example`.
 Katalog, buyurtma va to'lov sozlamalari endi bu yerda emas: ularni
 `/admin` boshqaruv paneli Firestore'da saqlaydi.
 """
+import json
 import os
 from pathlib import Path
 
@@ -70,6 +71,32 @@ BOT_API_SECRET = os.environ.get('BOT_API_SECRET', '').strip()
 # ildizidagi *-firebase-adminsdk-*.json fayli qidiriladi.
 FIREBASE_KEY_FILE = os.environ.get('FIREBASE_KEY_FILE', '').strip()
 FIREBASE_STORAGE_BUCKET = os.environ.get('FIREBASE_STORAGE_BUCKET', '').strip()
+
+# Service account JSON butunligicha env o'zgaruvchida ham berilishi mumkin.
+# Hostingga (Railway va h.k.) qo'yilganda fayl yuklab bo'lmaydi — kalit
+# git'ga tushmaydi va tushmasligi ham kerak. Shuning uchun u yerda shu
+# yo'l ishlatiladi; kompyuterda esa oddiy fayl topiladi.
+FIREBASE_SERVICE_ACCOUNT = os.environ.get('FIREBASE_SERVICE_ACCOUNT', '').strip()
+
+
+def service_account_info() -> dict | None:
+    """Env orqali berilgan service account. Berilmagan bo'lsa None."""
+    if not FIREBASE_SERVICE_ACCOUNT:
+        return None
+
+    try:
+        data = json.loads(FIREBASE_SERVICE_ACCOUNT)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f'FIREBASE_SERVICE_ACCOUNT yaroqli JSON emas: {error}'
+        ) from error
+
+    # Env o'zgaruvchida yangi qatorlar ko'pincha \n bo'lib qoladi
+    key = data.get('private_key')
+    if isinstance(key, str):
+        data['private_key'] = key.replace('\\n', '\n')
+
+    return data
 
 
 def find_service_account() -> str:

@@ -9,23 +9,28 @@ from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 
-from config import FIREBASE_STORAGE_BUCKET, find_service_account
+from config import FIREBASE_STORAGE_BUCKET, find_service_account, service_account_info
 
-key_path = find_service_account()
+# Kalit ikki yo'ldan kelishi mumkin:
+#   1. FIREBASE_SERVICE_ACCOUNT env o'zgaruvchisi — hosting uchun
+#   2. Loyihadagi *-firebase-adminsdk-*.json fayl — kompyuterda ishlaganda
+_info = service_account_info()
+
+if _info:
+    _cred = credentials.Certificate(_info)
+    _project_id = _info.get('project_id', '')
+else:
+    _key_path = find_service_account()
+    _cred = credentials.Certificate(_key_path)
+    import json as _json
+    with open(_key_path, encoding='utf-8') as handle:
+        _project_id = _json.load(handle).get('project_id', '')
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate(key_path)
-    options = {}
-    if FIREBASE_STORAGE_BUCKET:
-        options['storageBucket'] = FIREBASE_STORAGE_BUCKET
-    else:
-        # Odatiy nom: <project-id>.firebasestorage.app
-        import json as _json
-        with open(key_path, encoding='utf-8') as handle:
-            project_id = _json.load(handle).get('project_id', '')
-        options['storageBucket'] = f"{project_id}.firebasestorage.app"
-
-    firebase_admin.initialize_app(cred, options)
+    options = {
+        'storageBucket': FIREBASE_STORAGE_BUCKET or f'{_project_id}.firebasestorage.app'
+    }
+    firebase_admin.initialize_app(_cred, options)
 
 db = firestore.client()
 bucket = storage.bucket()
