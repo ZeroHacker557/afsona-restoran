@@ -56,7 +56,7 @@ export function CustomersPage() {
           style={{ color: 'var(--faint)' }}
         />
         <input
-          className="adm-input pl-9"
+          className="adm-input adm-input-search"
           placeholder="Ism, username, telefon yoki ID"
           value={search}
           onChange={(event) => setSearch(event.target.value)}

@@ -7,6 +7,8 @@ import {
   LogOut,
   Megaphone,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Moon,
   Settings,
   ShieldCheck,
@@ -81,6 +83,9 @@ function readRoute(): Route {
   return TITLES[hash] ? hash : 'dashboard'
 }
 
+/** Yon menyu holati shu kalit ostida saqlanadi. */
+const SIDEBAR_KEY = 'afsona-admin-sidebar'
+
 export default function AdminApp() {
   const [state, setState] = useState<'checking' | 'in' | 'out'>('checking')
   const [email, setEmail] = useState('')
@@ -132,6 +137,35 @@ export default function AdminApp() {
 function Shell({ email }: { email: string }) {
   const [route, setRoute] = useState<Route>(readRoute)
   const [menuOpen, setMenuOpen] = useState(false)
+  /**
+   * Katta ekranda yon menyu yig'ilganmi. Tanlov saqlanadi — admin har
+   * safar qaytadan bosmasin.
+   */
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  function toggleSidebar() {
+    // Kichik ekranda menyu — chetdan chiqadigan panel, u yerda yig'ish
+    // ma'nosiz: menyu allaqachon ekranni band qilmaydi.
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      setMenuOpen((open) => !open)
+      return
+    }
+    // Yozuvni updater ichida qilmaymiz: u toza funksiya bo'lishi kerak,
+    // aks holda StrictMode uni ikki marta bajaradi.
+    const next = !collapsed
+    setCollapsed(next)
+    try {
+      localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0')
+    } catch {
+      // localStorage o'chirilgan bo'lsa — shunchaki saqlanmaydi
+    }
+  }
   const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme())
   const data = useAdminData()
 
@@ -168,7 +202,7 @@ function Shell({ email }: { email: string }) {
   }
 
   return (
-    <div className="adm-shell">
+    <div className={`adm-shell ${collapsed ? 'collapsed' : ''}`}>
       {menuOpen && (
         <div
           className="fixed inset-0 z-[65] bg-black/40 md:hidden"
@@ -176,7 +210,12 @@ function Shell({ email }: { email: string }) {
         />
       )}
 
-      <aside className={`adm-sidebar ${menuOpen ? 'open' : ''}`}>
+      <aside
+        className={`adm-sidebar ${menuOpen ? 'open' : ''}`}
+        /* Yig'ilgan menyu Tab bilan ham, o'quvchi dastur uchun ham
+           mavjud bo'lmasin. Kichik ekranda panel ochilsa — yana faol. */
+        inert={collapsed && !menuOpen}
+      >
         <div className="adm-logo">
           <img src={LOGO} alt={BRAND.fullName} className="adm-logo-mark object-cover" />
           <span>
@@ -223,8 +262,16 @@ function Shell({ email }: { email: string }) {
 
       <div className="adm-main">
         <header className="adm-topbar">
-          <button className="adm-icon-btn adm-burger" onClick={() => setMenuOpen(true)} aria-label="Menyu">
-            <Menu size={20} />
+          <button
+            className="adm-icon-btn adm-burger"
+            onClick={toggleSidebar}
+            aria-label={collapsed ? 'Menyuni ochish' : 'Menyuni yig‘ish'}
+            title={collapsed ? 'Menyuni ochish' : 'Menyuni yig‘ish'}
+          >
+            <Menu size={20} className="adm-burger-mobile" />
+            <span className="adm-burger-desktop">
+              {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+            </span>
           </button>
 
           <span className="adm-title">{TITLES[route]}</span>

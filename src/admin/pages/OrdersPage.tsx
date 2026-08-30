@@ -153,7 +153,7 @@ export function OrdersPage() {
             style={{ color: 'var(--faint)' }}
           />
           <input
-            className="adm-input pl-9"
+            className="adm-input adm-input-search"
             placeholder="Raqam, ism, telefon yoki manzil"
             value={search}
             onChange={(event) => setSearch(event.target.value)}

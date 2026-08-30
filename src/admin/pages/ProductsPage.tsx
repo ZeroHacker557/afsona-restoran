@@ -144,7 +144,7 @@ export function ProductsPage() {
             style={{ color: 'var(--faint)' }}
           />
           <input
-            className="adm-input pl-9"
+            className="adm-input adm-input-search"
             placeholder="Taom qidirish"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
