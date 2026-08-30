@@ -3,7 +3,7 @@ import { MessageCircle, Phone, Search, Send } from 'lucide-react'
 import { useAdminData } from '../lib/data-context'
 import { adminPost } from '../lib/api'
 import { Modal } from '../components/Modal'
-import { Empty, Field, Spinner } from '../components/ui'
+import { Empty, Field, RowsSkeleton, Spinner } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { initials, money, timeAgo } from '../lib/format'
 import type { AdminUser } from '../lib/db'
@@ -11,7 +11,7 @@ import type { AdminUser } from '../lib/db'
 const DEAD = new Set(['Bekor qilingan', 'Rad etildi'])
 
 export function CustomersPage() {
-  const { users, orders } = useAdminData()
+  const { users, orders, loaded } = useAdminData()
   const [search, setSearch] = useState('')
   const [writing, setWriting] = useState<AdminUser | null>(null)
 
@@ -65,7 +65,11 @@ export function CustomersPage() {
 
       {rows.length === 0 ? (
         <div className="adm-card">
-          <Empty text="Mijoz topilmadi" />
+          {!loaded.users ? (
+            <RowsSkeleton rows={6} />
+          ) : (
+            <Empty text="Mijoz topilmadi" />
+          )}
         </div>
       ) : (
         <div className="adm-card adm-table-wrap">
@@ -82,7 +86,7 @@ export function CustomersPage() {
             </thead>
             <tbody>
               {rows.map(({ user, count, sum }) => (
-                <tr key={user.id}>
+                <tr key={user.id} className="adm-row-hover">
                   <td>
                     <div className="flex items-center gap-3">
                       {user.photo_url ? (

@@ -90,12 +90,15 @@ export function StatCard({
   sub,
   icon,
   tone,
+  loading,
 }: {
   label: string
   value: string
   sub?: string
   icon?: ReactNode
   tone?: string
+  /** Ma'lumot hali kelmagan — raqam o'rniga skelet ko'rsatiladi. */
+  loading?: boolean
 }) {
   return (
     <div className="adm-stat">
@@ -110,8 +113,18 @@ export function StatCard({
           </span>
         )}
       </div>
-      <span className="adm-stat-value">{value}</span>
-      {sub && <span className="text-xs" style={{ color: 'var(--muted)' }}>{sub}</span>}
+      {loading ? (
+        <Skeleton className="adm-stat-skeleton" />
+      ) : (
+        <span className="adm-stat-value">{value}</span>
+      )}
+
+      {sub &&
+        (loading ? (
+          <Skeleton className="mt-1 h-3 w-24" />
+        ) : (
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{sub}</span>
+        ))}
     </div>
   )
 }
@@ -146,6 +159,57 @@ export function ConfirmBar({
           {busy ? <Spinner /> : confirmText}
         </button>
       </div>
+    </div>
+  )
+}
+
+/* ── Skeletlar ──────────────────────────────────────────────
+   Ma'lumot kelgunicha bo'sh joyni band qilib turadi: sahifa
+   "sakramaydi" va ekranda nol qiymatlar chaqnab o'tmaydi. */
+
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <span className={`adm-skeleton ${className}`} aria-hidden="true" />
+}
+
+/** Jadval yoki ro'yxat uchun qatorlar. */
+export function RowsSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col" aria-hidden="true">
+      {Array.from({ length: rows }, (_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-3 border-t px-4 py-3"
+          style={{ borderColor: 'var(--line-soft)' }}
+        >
+          <Skeleton className="size-10 shrink-0 rounded-[10px]" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-3.5 w-2/5" />
+            <Skeleton className="mt-2 h-3 w-1/4" />
+          </div>
+          <Skeleton className="h-4 w-20" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Kartochkalar to'ri — taomlar va shunga o'xshash bo'limlar uchun. */
+export function CardsSkeleton({ count = 8 }: { count?: number }) {
+  return (
+    <div
+      className="grid gap-3"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}
+      aria-hidden="true"
+    >
+      {Array.from({ length: count }, (_, index) => (
+        <div key={index} className="adm-card overflow-hidden">
+          <Skeleton className="h-32 w-full rounded-none" />
+          <div className="p-3">
+            <Skeleton className="h-3.5 w-4/5" />
+            <Skeleton className="mt-2 h-3 w-1/3" />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

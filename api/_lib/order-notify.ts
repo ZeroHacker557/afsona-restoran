@@ -18,6 +18,8 @@ export type OrderDoc = {
   paymentMethod?: string
   paymentStatus?: string
   status?: string
+  /** Bekor qilish/rad etish sababi — admin paneldan tanlanadi. */
+  cancelReason?: string
   /** Buyurtmani olgan kuryerning Telegram id'si. */
   courierId?: number
   courierName?: string
@@ -308,6 +310,13 @@ export async function notifyCustomerStatus(order: OrderDoc, status: string) {
   }
 
   if (cancelled) {
+    // Sabab bo'lsa aytamiz — «nega bekor qilindi?» degan qo'ng'iroq kamayadi
+    const reason = (order.cancelReason || '').trim()
+    if (reason) {
+      lines.push('')
+      lines.push(`📌 <b>Sabab:</b> ${escapeHtml(reason)}`)
+    }
+
     const phone = await brandPhone()
     if (phone) {
       lines.push('')

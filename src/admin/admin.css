@@ -488,3 +488,278 @@
   .adm-content { padding: 14px; }
   .adm-topbar { padding: 12px 14px; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   SKELETLAR VA ANIMATSIYALAR
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Skelet ─────────────────────────────────────────────── */
+.adm-skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-3) 25%,
+    var(--line-soft) 37%,
+    var(--surface-3) 63%
+  );
+  background-size: 400% 100%;
+  animation: admShimmer 1.4s ease infinite;
+}
+
+@keyframes admShimmer {
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
+}
+
+.adm-stat-skeleton { height: 26px; width: 60%; margin: 4px 0 2px; }
+
+/* ── Sahifa almashinuvi ─────────────────────────────────── */
+.adm-page {
+  /* .adm-content'ning gap'i endi shu o'ramga tushadi — ichida qayta beramiz */
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: admPageIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes admPageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+   Kartochkalar birin-ketin paydo bo'ladi. Faqat dastlabki oltitasi —
+   uzun ro'yxatda har bir element kechikib chiqsa, sabr toqat qoladi.
+*/
+.adm-stagger > * {
+  animation: admPageIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.adm-stagger > *:nth-child(1) { animation-delay: 0.02s; }
+.adm-stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.adm-stagger > *:nth-child(3) { animation-delay: 0.1s; }
+.adm-stagger > *:nth-child(4) { animation-delay: 0.14s; }
+.adm-stagger > *:nth-child(5) { animation-delay: 0.18s; }
+.adm-stagger > *:nth-child(6) { animation-delay: 0.22s; }
+.adm-stagger > *:nth-child(n + 7) { animation-delay: 0.26s; }
+
+/* ── Bosiladigan kartochkalar ───────────────────────────── */
+.adm-clickable {
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.16s ease,
+              border-color 0.16s ease;
+}
+.adm-clickable:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand-line);
+  box-shadow: 0 4px 14px rgb(16 12 34 / 0.1);
+}
+.adm-clickable:active { transform: translateY(0) scale(0.99); }
+
+/* Jadval qatorlari — bosilishi mumkinligi sezilib tursin */
+.adm-row-hover { transition: background-color 0.14s ease; }
+.adm-row-hover:hover { background: var(--surface-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-skeleton,
+  .adm-page,
+  .adm-stagger > * { animation: none; }
+  .adm-clickable { transition: none; }
+}
+
+/* ── Aylantirish chizig'i (scrollbar) ───────────────────────
+   Brauzerning kulrang chizig'i panel dizayniga begona edi.
+   Brend rangida, ingichka va yumaloq qilib beramiz.
+
+   Muhim: Chrome'da standart `scrollbar-color` berilsa, u
+   `::-webkit-scrollbar` qoidalarini butunlay e'tiborsiz qoldiradi —
+   strelkalar qaytib keladi va rangni to'liq boshqarib bo'lmaydi.
+   Shuning uchun ikkala usulni @supports bilan ajratamiz.
+   ──────────────────────────────────────────────────────────── */
+
+/* Firefox — faqat standart xossalarni tushunadi */
+@supports not selector(::-webkit-scrollbar) {
+  .adm-board,
+  .adm-table-wrap,
+  .adm-sidebar,
+  .adm-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--brand) var(--surface-3);
+  }
+}
+
+/* Chrome / Edge / Safari — to'liq nazorat */
+.adm-board::-webkit-scrollbar,
+.adm-table-wrap::-webkit-scrollbar,
+.adm-sidebar::-webkit-scrollbar,
+.adm-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.adm-board::-webkit-scrollbar-track,
+.adm-table-wrap::-webkit-scrollbar-track,
+.adm-sidebar::-webkit-scrollbar-track,
+.adm-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.adm-board::-webkit-scrollbar-thumb,
+.adm-table-wrap::-webkit-scrollbar-thumb,
+.adm-sidebar::-webkit-scrollbar-thumb,
+.adm-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  /* 2px shaffof hoshiya — chiziq yo'lakcha ichida suzib turgandek */
+  border: 2px solid transparent;
+  background: var(--brand);
+  background-clip: content-box;
+  transition: background-color 0.16s ease;
+}
+
+.adm-board::-webkit-scrollbar-thumb:hover,
+.adm-table-wrap::-webkit-scrollbar-thumb:hover,
+.adm-sidebar::-webkit-scrollbar-thumb:hover,
+.adm-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-strong);
+  background-clip: content-box;
+}
+
+/* Chekkadagi strelkalar — bizga kerak emas */
+.adm-board::-webkit-scrollbar-button,
+.adm-table-wrap::-webkit-scrollbar-button,
+.adm-sidebar::-webkit-scrollbar-button,
+.adm-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Burchakdagi kvadratcha (ikki tomonlama aylanishda) */
+.adm-board::-webkit-scrollbar-corner,
+.adm-table-wrap::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Kanban: kartani sudrab ko'chirish ──────────────────────
+   Statusni o'zgartirish uchun kartani ochib tugma bosish — uch
+   harakat. Sudrash — bitta. Kartani bosib ochish ham qoladi:
+   brauzer sudralgandan keyin click hodisasini yubormaydi.
+   ──────────────────────────────────────────────────────────── */
+
+.adm-draggable {
+  cursor: grab;
+  /* Sudralayotganda matn belgilanib ketmasin */
+  user-select: none;
+}
+
+.adm-draggable:active { cursor: grabbing; }
+
+/* Sudralayotgan karta — asl joyida xira soya bo'lib qoladi */
+.adm-order-card.dragging {
+  opacity: 0.4;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Server javobini kutayotgan karta */
+.adm-order-card.pending {
+  opacity: 0.65;
+  border-style: dashed;
+  border-color: var(--brand-line);
+}
+
+/* Karta tashlanadigan ustun */
+.adm-column.drop-target {
+  outline: 2px dashed var(--brand);
+  outline-offset: -2px;
+  background: var(--brand-soft);
+}
+
+/* Sudrash mumkinligini bir marta aytib qo'yamiz */
+.adm-board-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+}
+
+/* ── Bekor qilish sababi ────────────────────────────────────── */
+
+.adm-reason {
+  margin-top: 10px;
+  border: 1px solid var(--danger-soft);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  padding: 12px;
+  animation: admPageIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Bekor qilingan buyurtma oynasidagi sabab satri */
+.adm-note-danger {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── Taomlar: sudrab tartiblash ─────────────────────────────
+   Sudrash faqat dastakdan boshlanadi — kartaning o'zi sudraladigan
+   bo'lsa, ichidagi checkbox va tugmalarni bosish qiyinlashadi.
+   ──────────────────────────────────────────────────────────── */
+
+.adm-grip {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  align-self: stretch;
+  /* Kartaning gap'ini yeb qo'ymasin — narx satri ikki qatorga tushmasin */
+  margin: -4px -6px -4px -6px;
+  border-radius: var(--r-sm);
+  color: var(--faint);
+  cursor: grab;
+  user-select: none;
+  transition: color 0.14s ease, background-color 0.14s ease;
+}
+
+.adm-grip:hover {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.adm-grip:active { cursor: grabbing; }
+
+.adm-card.dragging {
+  opacity: 0.4;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Taom shu kartaning o'rniga qo'yiladi */
+.adm-card.drop-here {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+/* Qo'lda o'rnatish yo'riqnomasi */
+.adm-install-steps {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  list-style: disc;
+}
+.adm-install-steps b { color: var(--ink); }

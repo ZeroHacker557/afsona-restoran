@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import {
+  GripVertical,
   ImagePlus,
   Percent,
   Plus,
@@ -13,18 +14,19 @@ import {
   createProduct,
   deleteProduct,
   deleteProducts,
+  saveProductOrder,
   shiftPrices,
   updateProduct,
   type AdminProduct,
 } from '../lib/db'
 import { removeUploaded, uploadProductImage } from '../lib/upload'
 import { Modal } from '../components/Modal'
-import { Chip, ConfirmBar, Empty, Field, Spinner, Switch } from '../components/ui'
+import { CardsSkeleton, Chip, ConfirmBar, Empty, Field, Spinner, Switch } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { money } from '../lib/format'
 
 export function ProductsPage() {
-  const { products, categories } = useAdminData()
+  const { products, categories, loaded } = useAdminData()
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [editing, setEditing] = useState<AdminProduct | 'new' | null>(null)
@@ -32,9 +34,56 @@ export function ProductsPage() {
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [busy, setBusy] = useState(false)
 
+  /** Sudralayotgan taom. */
+  const [dragId, setDragId] = useState<string | null>(null)
+  /** Ustiga tashlanmoqchi bo'lgan taom — chiziq shu yerda ko'rinadi. */
+  const [overId, setOverId] = useState<string | null>(null)
+  /**
+   * Saqlash javobini kutayotgan tartib. Firestore yangilanishi kelgunicha
+   * kartalar sakrab qolmasligi uchun mahalliy tartibni ishlatamiz.
+   */
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null)
+
+  /** To'liq ro'yxat — sudrab qo'yilgan tartib bilan. */
+  const ordered = useMemo(() => {
+    if (!localOrder) return products
+    const rank = new Map(localOrder.map((id, index) => [id, index]))
+    return [...products].sort(
+      (a, b) =>
+        (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    )
+  }, [products, localOrder])
+
+  /**
+   * Taomni boshqasining o'rniga qo'yish.
+   *
+   * Tartib butun ro'yxat bo'yicha hisoblanadi — kategoriya yoki qidiruv
+   * bilan filtrlangan bo'lsa ham, "A ni B turgan joyga qo'y" degani
+   * to'liq ro'yxatdagi haqiqiy o'rin bilan bir xil bo'ladi.
+   */
+  async function dropOn(targetId: string) {
+    if (!dragId || dragId === targetId) return
+    const ids = ordered.map((product) => product.id)
+    const from = ids.indexOf(dragId)
+    const to = ids.indexOf(targetId)
+    if (from < 0 || to < 0) return
+
+    const [moved] = ids.splice(from, 1)
+    ids.splice(to, 0, moved)
+    setLocalOrder(ids)
+
+    try {
+      await saveProductOrder(ids)
+      toast('Tartib saqlandi — ilovada ham shunday ko‘rinadi')
+    } catch (error) {
+      toastError(error)
+      setLocalOrder(null)
+    }
+  }
+
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
-    return products.filter((product) => {
+    return ordered.filter((product) => {
       if (category !== 'all' && product.category !== category) return false
       if (!needle) return true
       return (
@@ -42,7 +91,7 @@ export function ProductsPage() {
         (product.description || '').toLowerCase().includes(needle)
       )
     })
-  }, [products, search, category])
+  }, [ordered, search, category])
 
   const toggleSelect = (id: string) =>
     setSelection((previous) =>
@@ -154,16 +203,64 @@ export function ProductsPage() {
 
       {filtered.length === 0 ? (
         <div className="adm-card">
-          <Empty text="Taom topilmadi" />
+          {!loaded.products ? (
+            <CardsSkeleton count={8} />
+          ) : (
+            <Empty text="Taom topilmadi" />
+          )}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filtered.map((product) => (
             <div
               key={product.id}
-              className="adm-card flex gap-3 p-3"
+              className={[
+                'adm-card adm-clickable flex gap-3 p-3',
+                dragId === product.id ? 'dragging' : '',
+                overId === product.id && dragId !== product.id ? 'drop-here' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               style={product.available === false ? { opacity: 0.62 } : undefined}
+              onDragOver={(event) => {
+                if (!dragId) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+                setOverId(product.id)
+              }}
+              onDragLeave={(event) => {
+                if (event.currentTarget.contains(event.relatedTarget as Node)) return
+                setOverId((current) => (current === product.id ? null : current))
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                const id = product.id
+                setOverId(null)
+                setDragId(null)
+                void dropOn(id)
+              }}
             >
+              {/*
+                 Sudrash faqat shu dastakdan boshlanadi — aks holda katta
+                 ichidagi checkbox va tugmalarni bosish qiyinlashadi.
+              */}
+              <span
+                draggable
+                className="adm-grip"
+                title="Sudrab tartibni o'zgartiring"
+                onDragStart={(event) => {
+                  setDragId(product.id)
+                  event.dataTransfer.effectAllowed = 'move'
+                  event.dataTransfer.setData('text/plain', product.id)
+                }}
+                onDragEnd={() => {
+                  setDragId(null)
+                  setOverId(null)
+                }}
+              >
+                <GripVertical size={15} />
+              </span>
+
               <label className="flex items-start pt-1">
                 <input
                   type="checkbox"

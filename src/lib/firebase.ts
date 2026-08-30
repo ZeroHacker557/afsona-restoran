@@ -61,9 +61,18 @@ export function subscribeToProducts(callback: (products: Product[]) => void, onE
         discount: data.discount || '',
         stock: typeof data.stock === 'number' ? data.stock : undefined,
         // Stop-list: admin panelda o'chirilgan taom savatga tushmaydi
-        available: data.available !== false
+        available: data.available !== false,
+        // Admin panelda sudrab belgilangan tartib
+        sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : undefined,
       }
     })
+    // Firestore hujjatlarni id bo'yicha qaytaradi — bu tasodifiy tartib.
+    // Restoran qaysi taomni yuqorida ko'rsatishni o'zi hal qiladi.
+    products.sort(
+      (a, b) =>
+        (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER) ||
+        a.name.localeCompare(b.name, 'uz'),
+    )
     callback(products)
   }, (error) => {
     console.error('[Firebase] Products snapshot ERROR:', error)
@@ -86,9 +95,16 @@ export function subscribeToCategories(callback: (categories: Category[]) => void
       return {
         id: numId,
         name: data.name || '',
-        icon: data.icon || 'package'
+        icon: data.icon || 'package',
+        sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : undefined,
       }
     })
+    // Admin paneldagi tartib bilan bir xil bo'lsin
+    categories.sort(
+      (a, b) =>
+        (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER) ||
+        a.name.localeCompare(b.name, 'uz'),
+    )
     callback(categories)
   }, (error) => {
     console.error('[Firebase] Categories snapshot ERROR:', error)

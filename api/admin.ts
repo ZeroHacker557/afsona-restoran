@@ -451,9 +451,12 @@ async function loadOrder(orderId: string) {
 }
 
 async function handleOrderStatus(req: VercelRequest, res: VercelResponse) {
-  const body = req.body as { orderId?: string; status?: string }
+  const body = req.body as { orderId?: string; status?: string; cancelReason?: string }
   const orderId = String(body?.orderId || '')
   const status = String(body?.status || '')
+  // Sabab faqat bekor qilishda ma'noga ega. Uzunligini cheklaymiz —
+  // bu matn mijozga Telegram xabarida ko'rinadi.
+  const cancelReason = String(body?.cancelReason || '').trim().slice(0, 160)
 
   if (!orderId) return fail(res, 400, 'Buyurtma ko‘rsatilmagan')
   if (!STATUSES.has(status)) return fail(res, 400, 'Status noto‘g‘ri')
@@ -461,9 +464,14 @@ async function handleOrderStatus(req: VercelRequest, res: VercelResponse) {
   const order = await loadOrder(orderId)
   if (!order) return fail(res, 404, 'Buyurtma topilmadi')
 
-  await order.ref.update({ status, statusUpdatedAt: new Date().toISOString() })
+  const cancelled = status === 'Bekor qilingan' || status === 'Rad etildi'
+  const patch: Record<string, unknown> = { status, statusUpdatedAt: new Date().toISOString() }
+  // Statusdan qaytib chiqilsa eski sabab qolib ketmasin
+  patch.cancelReason = cancelled ? cancelReason : ''
 
-  const updated = { ...order.data, status }
+  await order.ref.update(patch)
+
+  const updated = { ...order.data, status, cancelReason: patch.cancelReason as string }
   await notifyCustomerStatus(updated, status)
   // Guruhdagi/kuryerdagi xabar ham yangilansin — eskirgan tugma qolmasin
   await syncCourierMessages(updated)

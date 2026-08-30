@@ -21,6 +21,8 @@ export type Product = {
   stock?: number
   /** false — stop-list: taom vaqtincha sotuvda emas. */
   available?: boolean
+  /** Admin panelda sudrab belgilangan tartib. Kichik son — yuqorida. */
+  sortOrder?: number
 }
 
 export type Category = {
@@ -28,6 +30,8 @@ export type Category = {
   name: string
   icon: string
   image?: string
+  /** Admin panelda belgilangan tartib. Kichik son — birinchi. */
+  sortOrder?: number
 }
 
 export type OrderStatus = 'Yangi' | 'Qabul qilindi' | 'Yetkazilmoqda' | 'Yetkazildi' | 'Bekor qilingan' | 'Rad etildi'

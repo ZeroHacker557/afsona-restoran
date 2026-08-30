@@ -10,14 +10,14 @@ import {
   Users,
 } from 'lucide-react'
 import { useAdminData } from '../lib/data-context'
-import { StatCard, Empty, Chip } from '../components/ui'
+import { StatCard, Empty, Chip, Skeleton, RowsSkeleton } from '../components/ui'
 import { BarChart, type ChartPoint } from '../components/BarChart'
 import { dayKey, dayLabel, money, shortMoney, timeAgo } from '../lib/format'
 import { DEAD_STATUSES as DEAD, STATUS_STYLE } from '../lib/status'
 import { useNow } from '../lib/now'
 
 export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | 'products') => void }) {
-  const { orders, products, users, hours } = useAdminData()
+  const { orders, products, users, hours, loaded } = useAdminData()
   const now = useNow()
 
   const stats = useMemo(() => {
@@ -83,34 +83,39 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="adm-stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Bugungi tushum"
           value={money(stats.todayRevenue)}
           sub={`${stats.todayCount} ta buyurtma`}
           icon={<TrendingUp size={16} />}
+          loading={!loaded.orders}
         />
         <StatCard
           label="7 kunlik tushum"
           value={money(stats.weekRevenue)}
           sub={`${stats.weekCount} ta buyurtma`}
           icon={<Receipt size={16} />}
+          loading={!loaded.orders}
         />
         <StatCard
           label="O'rtacha chek"
           value={money(stats.average)}
           sub={`Jami ${orders.length} ta buyurtma`}
           icon={<ShoppingBag size={16} />}
+          loading={!loaded.orders}
         />
         <StatCard
           label="Mijozlar"
           value={String(users.length)}
           sub={`${stats.pending} ta buyurtma kutmoqda`}
           icon={<Users size={16} />}
+          loading={!loaded.users || !loaded.orders}
         />
       </div>
 
-      {(stats.pending > 0 || stopped.length > 0 || outOfStock.length > 0 || hours.temporarilyClosed) && (
+      {loaded.orders && loaded.products &&
+        (stats.pending > 0 || stopped.length > 0 || outOfStock.length > 0 || hours.temporarilyClosed) && (
         <div className="flex flex-wrap gap-2">
           {hours.temporarilyClosed && (
             <button className="adm-btn sm" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', borderColor: 'transparent' }}>
@@ -144,12 +149,20 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
         <div className="adm-card">
           <div className="adm-card-head">
             <span>Tushum — oxirgi 14 kun</span>
-            <span className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-              {shortMoney(stats.chart.reduce((sum, point) => sum + point.value, 0))}
-            </span>
+            {loaded.orders ? (
+              <span className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
+                {shortMoney(stats.chart.reduce((sum, point) => sum + point.value, 0))}
+              </span>
+            ) : (
+              <Skeleton className="h-3.5 w-16" />
+            )}
           </div>
           <div className="p-4">
-            <BarChart data={stats.chart} />
+            {loaded.orders ? (
+              <BarChart data={stats.chart} />
+            ) : (
+              <Skeleton className="h-[150px] w-full" />
+            )}
           </div>
         </div>
 
@@ -157,7 +170,17 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
           <div className="adm-card-head">
             <span>Eng ko'p sotilgan (30 kun)</span>
           </div>
-          {stats.top.length === 0 ? (
+          {!loaded.orders ? (
+            <div className="flex flex-col gap-3 p-3">
+              {Array.from({ length: 5 }, (_, index) => (
+                <div key={index} className="flex items-center gap-3">
+                  <Skeleton className="size-7 shrink-0 rounded-lg" />
+                  <Skeleton className="h-3.5 flex-1" />
+                  <Skeleton className="h-3 w-10" />
+                </div>
+              ))}
+            </div>
+          ) : stats.top.length === 0 ? (
             <Empty text="Hozircha sotuv yo'q" />
           ) : (
             <div className="flex flex-col gap-2 p-3">
@@ -190,7 +213,9 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
             Hammasi <ArrowRight size={14} />
           </button>
         </div>
-        {recent.length === 0 ? (
+        {!loaded.orders ? (
+          <RowsSkeleton rows={4} />
+        ) : recent.length === 0 ? (
           <Empty text="Hali buyurtma yo'q" />
         ) : (
           <div className="adm-table-wrap">
@@ -208,7 +233,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
                 {recent.map((order) => {
                   const style = STATUS_STYLE[order.status] || STATUS_STYLE.Yangi
                   return (
-                    <tr key={order.id}>
+                    <tr key={order.id} className="adm-row-hover">
                       <td className="font-bold">{order.orderNumber}</td>
                       <td>
                         <div className="font-semibold">{order.customer?.name || '—'}</div>

@@ -17,6 +17,30 @@ import type { Firestore } from 'firebase-admin/firestore'
 
 let cachedApp: App | null = null
 
+/**
+ * Service account'ni topadi.
+ *
+ * Vercel'da butun JSON `FIREBASE_SERVICE_ACCOUNT` env o'zgaruvchisida
+ * turadi. Lokal mashinada esa u ko'pincha alohida fayl bo'ladi va
+ * `.env` da faqat uning yo'li (`FIREBASE_KEY_FILE`) yoziladi — bot ham
+ * xuddi shunday ishlaydi. Ikkalasini ham qo'llaymiz, aks holda API
+ * lokal serverda umuman ishga tushmaydi.
+ */
+async function readServiceAccount(): Promise<string | null> {
+  const inline = process.env.FIREBASE_SERVICE_ACCOUNT
+  if (inline) return inline
+
+  const file = process.env.FIREBASE_KEY_FILE
+  if (!file) return null
+
+  try {
+    const { readFile } = await import('node:fs/promises')
+    return await readFile(file, 'utf8')
+  } catch {
+    return null
+  }
+}
+
 async function createApp(): Promise<App> {
   if (cachedApp) return cachedApp
 
@@ -28,7 +52,7 @@ async function createApp(): Promise<App> {
     return cachedApp
   }
 
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT
+  const raw = await readServiceAccount()
   if (!raw) {
     throw new Error('FIREBASE_SERVICE_ACCOUNT sozlanmagan')
   }

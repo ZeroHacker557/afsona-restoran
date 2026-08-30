@@ -270,6 +270,11 @@ function Shell({ email }: { email: string }) {
         </header>
 
         <div className="adm-content">
+          {/*
+             key={route} — o'ramni har safar yangidan yaratadi, shuning uchun
+             kirish animatsiyasi har sahifa almashganda qaytadan ishlaydi.
+          */}
+          <div className="adm-page" key={route}>
           {route === 'dashboard' && <DashboardPage onNavigate={go} />}
           {route === 'orders' && <OrdersPage />}
           {route === 'products' && <ProductsPage />}
@@ -282,6 +287,7 @@ function Shell({ email }: { email: string }) {
           {route === 'couriers' && <CouriersPage />}
           {route === 'channel' && <ChannelPage />}
           {route === 'admins' && <AdminsPage />}
+          </div>
         </div>
       </div>
     </div>

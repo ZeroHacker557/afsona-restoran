@@ -3,12 +3,12 @@ import { Copy, Pencil, Plus, Ticket, Trash2 } from 'lucide-react'
 import { useAdminData } from '../lib/data-context'
 import { createPromo, deletePromo, updatePromo, type AdminPromo } from '../lib/db'
 import { Modal } from '../components/Modal'
-import { Chip, ConfirmBar, Empty, Field, Spinner, Switch } from '../components/ui'
+import { Chip, ConfirmBar, Empty, Field, RowsSkeleton, Spinner, Switch } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { money } from '../lib/format'
 
 export function PromosPage() {
-  const { promos } = useAdminData()
+  const { promos, loaded } = useAdminData()
   const [editing, setEditing] = useState<AdminPromo | 'new' | null>(null)
   const [removing, setRemoving] = useState<AdminPromo | null>(null)
   const [busy, setBusy] = useState(false)
@@ -49,7 +49,11 @@ export function PromosPage() {
 
       {promos.length === 0 ? (
         <div className="adm-card">
-          <Empty text="Hali promokod yo'q" icon={<Ticket size={30} strokeWidth={1.6} />} />
+          {!loaded.promos ? (
+            <RowsSkeleton rows={4} />
+          ) : (
+            <Empty text="Hali promokod yo'q" icon={<Ticket size={30} strokeWidth={1.6} />} />
+          )}
         </div>
       ) : (
         <div className="adm-card adm-table-wrap">

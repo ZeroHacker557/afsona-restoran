@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
+import { devApi } from './vite-api-plugin.ts'
 
 /**
  * Ikkita mustaqil sahifa quriladi:
@@ -14,7 +15,9 @@ import { fileURLToPath } from 'node:url'
  * xoli bo'ladi.
  */
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // devApi — `api/` papkasidagi Vercel funksiyalarini lokal serverda ham
+  // ishlatadi. Production build'ga ta'sir qilmaydi.
+  plugins: [react(), tailwindcss(), devApi()],
   build: {
     rollupOptions: {
       input: {

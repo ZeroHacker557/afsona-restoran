@@ -87,6 +87,8 @@ export type AdminOrder = {
   courierName?: string | null
   claimedAt?: string | null
   deliveredAt?: string | null
+  /** Bekor qilish/rad etish sababi. */
+  cancelReason?: string | null
   products: {
     product: { id: number | string; name: string; price: number; images?: string[] }
     quantity: number
@@ -162,7 +164,16 @@ export function watchProducts(onData: (items: AdminProduct[]) => void, onError?:
       reviews: num(data.reviews),
       sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : undefined,
     }),
-    (items) => onData(items.sort((a, b) => a.name.localeCompare(b.name, 'uz'))),
+    // Avval qo'lda belgilangan tartib (sudrab qo'yilgan), keyin nom bo'yicha.
+    // sortOrder yo'q taomlar oxirida turadi — ular hali tartiblanmagan.
+    (items) =>
+      onData(
+        items.sort(
+          (a, b) =>
+            (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER) ||
+            a.name.localeCompare(b.name, 'uz'),
+        ),
+      ),
     onError,
   )
 }
@@ -277,6 +288,23 @@ export async function countProductsInCategory(name: string): Promise<number> {
   return snap.size
 }
 
+/**
+ * Taomlar tartibini saqlash — ilovada shu tartibda ko'rinadi.
+ *
+ * Firestore bitta batch'ga 500 tagacha amal sig'diradi. Katta menyuda
+ * shu chegaraga urilib qolmaslik uchun bo'laklarga bo'lib yozamiz.
+ */
+export async function saveProductOrder(ids: string[]) {
+  const CHUNK = 400
+  for (let start = 0; start < ids.length; start += CHUNK) {
+    const batch = writeBatch(db)
+    ids.slice(start, start + CHUNK).forEach((id, offset) => {
+      batch.update(doc(db, 'products', id), { sortOrder: start + offset })
+    })
+    await batch.commit()
+  }
+}
+
 /** Kategoriyalar tartibini saqlash. */
 export async function saveCategoryOrder(ids: string[]) {
   const batch = writeBatch(db)
@@ -309,6 +337,7 @@ export function watchOrders(onData: (items: AdminOrder[]) => void, onError?: (e:
       courierName: data.courierName == null ? null : str(data.courierName),
       claimedAt: data.claimedAt == null ? null : str(data.claimedAt),
       deliveredAt: data.deliveredAt == null ? null : str(data.deliveredAt),
+      cancelReason: data.cancelReason == null ? null : str(data.cancelReason),
       products: Array.isArray(data.products) ? (data.products as AdminOrder['products']) : [],
       customer: (data.customer || {}) as AdminOrder['customer'],
     }),

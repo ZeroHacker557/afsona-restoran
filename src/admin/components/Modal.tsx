@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 /**
@@ -31,7 +32,13 @@ export function Modal({
     }
   }, [onClose])
 
-  return (
+  /*
+     Modal document.body'ga chiqariladi. Sahifa o'rami (.adm-page) kirish
+     animatsiyasi paytida transform oladi — transform esa position: fixed
+     uchun yangi sanoq nuqtasi yaratadi va modal ekranga to'g'ri
+     joylashmay qolardi. Portal buni butunlay chetlab o'tadi.
+  */
+  return createPortal(
     <div className="adm-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className={`adm-modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true">
         <div className="adm-card-head">
@@ -52,6 +59,7 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

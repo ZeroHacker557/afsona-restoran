@@ -11,11 +11,11 @@ import {
 } from '../lib/db'
 import { CATEGORY_ICON_LIST, categoryIcon } from '../../utils/category-icons'
 import { Modal } from '../components/Modal'
-import { ConfirmBar, Empty, Field, Spinner } from '../components/ui'
+import { ConfirmBar, Empty, Field, RowsSkeleton, Spinner } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 
 export function CategoriesPage() {
-  const { categories, products } = useAdminData()
+  const { categories, products, loaded } = useAdminData()
   const [editing, setEditing] = useState<AdminCategory | 'new' | null>(null)
   const [removing, setRemoving] = useState<AdminCategory | null>(null)
   const [busy, setBusy] = useState(false)
@@ -62,7 +62,11 @@ export function CategoriesPage() {
 
       {categories.length === 0 ? (
         <div className="adm-card">
-          <Empty text="Hali kategoriya yo'q" />
+          {!loaded.categories ? (
+            <RowsSkeleton rows={4} />
+          ) : (
+            <Empty text="Hali kategoriya yo'q" />
+          )}
         </div>
       ) : (
         <div className="adm-card adm-table-wrap">

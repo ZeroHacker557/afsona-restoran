@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, ChevronDown, Grid2X2, Package, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowUpDown, Check, ChevronDown, Grid2X2, Package, SlidersHorizontal, X } from 'lucide-react'
 import { formatPrice } from '../data'
 import { PageHeader } from '../components/layout/PageHeader'
 import { ProductCard } from '../components/product/ProductCard'
@@ -39,7 +39,17 @@ export function CatalogPage({
 
   const [active, setActive] = useState(initialCategory || ALL)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [sortAscending, setSortAscending] = useState(true)
+  /**
+   * Saralash uchta holatda aylanadi:
+   *   'default' — restoran admin panelda sudrab qo'ygan tartib,
+   *   'cheap'   — avval arzon,
+   *   'expensive' — avval qimmat.
+   *
+   * Asosiy holat 'default': restoran qaysi taomni yuqorida ko'rsatishni
+   * o'zi hal qiladi. Ilgari bu yerda doim narx bo'yicha saralanardi va
+   * paneldagi tartib umuman ishlamasdi.
+   */
+  const [sortMode, setSortMode] = useState<'default' | 'cheap' | 'expensive'>('default')
   const [visible, setVisible] = useState(PAGE_SIZE)
 
   // Filtrlar (2-band)
@@ -87,11 +97,15 @@ export function CatalogPage({
       return true
     })
 
-    return [...filtered].sort((a, b) => (sortAscending ? a.price - b.price : b.price - a.price))
-  }, [products, active, ALL, priceFrom, priceTo, size, color, inStockOnly, sortAscending])
+    // 'default' — products massivi allaqachon restoran tartibida keladi
+    if (sortMode === 'default') return filtered
+    return [...filtered].sort((a, b) =>
+      sortMode === 'cheap' ? a.price - b.price : b.price - a.price,
+    )
+  }, [products, active, ALL, priceFrom, priceTo, size, color, inStockOnly, sortMode])
 
   // Filtr o'zgarsa boshidan ko'rsatamiz
-  const pageKey = `${active}|${priceFrom}|${priceTo}|${size}|${color}|${inStockOnly}|${sortAscending}`
+  const pageKey = `${active}|${priceFrom}|${priceTo}|${size}|${color}|${inStockOnly}|${sortMode}`
   const [lastKey, setLastKey] = useState(pageKey)
   if (pageKey !== lastKey) {
     setLastKey(pageKey)
@@ -152,12 +166,31 @@ export function CatalogPage({
             </span>
           )}
         </button>
-        <button onClick={() => setSortAscending((v) => !v)} className="filter-button">
-          <span>{sortAscending ? t('catalog.sortCheap') : t('catalog.sortExpensive')}</span>
-          <ChevronDown
-            size={17}
-            className={`transition-transform duration-300 ${!sortAscending ? 'rotate-180' : ''}`}
-          />
+        <button
+          onClick={() =>
+            setSortMode((mode) =>
+              mode === 'default' ? 'cheap' : mode === 'cheap' ? 'expensive' : 'default',
+            )
+          }
+          className={`filter-button ${sortMode !== 'default' ? 'is-active' : ''}`}
+        >
+          <span>
+            {sortMode === 'default'
+              ? t('catalog.sortDefault')
+              : sortMode === 'cheap'
+                ? t('catalog.sortCheap')
+                : t('catalog.sortExpensive')}
+          </span>
+          {sortMode === 'default' ? (
+            <ArrowUpDown size={16} />
+          ) : (
+            <ChevronDown
+              size={17}
+              className={`transition-transform duration-300 ${
+                sortMode === 'expensive' ? 'rotate-180' : ''
+              }`}
+            />
+          )}
         </button>
       </section>
 

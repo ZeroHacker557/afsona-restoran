@@ -66,23 +66,46 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
   const [payment, setPayment] = useState<PaymentSettings>({ cardNumber: '', cardOwner: '' })
   const [brand, setBrand] = useState<BrandSettings>({ name: '', phone: '', telegram: '', email: '', address: '' })
   const [hours, setHours] = useState<WorkingHours>(DEFAULT_HOURS)
-  const [ready, setReady] = useState(0)
+  /*
+   * Har bir kolleksiya uchun alohida "keldi" bayrog'i.
+   *
+   * Busiz sahifalar ma'lumot kelgunicha nol ko'rsatadi: tushum 0 so'm,
+   * mijozlar 0 ta. Bir-uch soniyadan keyin haqiqiy raqamlar chiqadi —
+   * bu esa "ma'lumotim yo'qolibdi" degan taassurot qoldiradi.
+   */
+  const [loaded, setLoaded] = useState({
+    products: false,
+    categories: false,
+    orders: false,
+    promos: false,
+    users: false,
+  })
   const [freshOrderIds, setFreshOrderIds] = useState<string[]>([])
 
   // Birinchi yuklashda ovoz chalinmasligi uchun oldingi ro'yxatni eslaymiz
   const knownOrders = useRef<Set<string> | null>(null)
 
   useEffect(() => {
-    const done = () => setReady((value) => value + 1)
+    const mark = (key: keyof typeof loaded) =>
+      setLoaded((current) => (current[key] ? current : { ...current, [key]: true }))
 
     const unsubs = [
       watchProducts((items) => {
         setProducts(items)
-        done()
+        mark('products')
       }),
-      watchCategories(setCategories),
-      watchPromos(setPromos),
-      watchUsers(setUsers),
+      watchCategories((items) => {
+        setCategories(items)
+        mark('categories')
+      }),
+      watchPromos((items) => {
+        setPromos(items)
+        mark('promos')
+      }),
+      watchUsers((items) => {
+        setUsers(items)
+        mark('users')
+      }),
       watchOrders((items) => {
         setOrders(items)
 
@@ -105,7 +128,7 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
           }
           items.forEach((order) => knownOrders.current!.add(order.id))
         }
-        done()
+        mark('orders')
       }),
       watchSetting('delivery', readDelivery, setDelivery),
       watchSetting('payment', readPayment, setPayment),
@@ -127,11 +150,12 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
       payment,
       brand,
       hours,
-      loading: ready < 2,
+      loaded,
+      loading: !loaded.products || !loaded.orders,
       freshOrderIds,
       markOrdersSeen: () => setFreshOrderIds([]),
     }),
-    [products, categories, orders, promos, users, delivery, payment, brand, hours, ready, freshOrderIds],
+    [products, categories, orders, promos, users, delivery, payment, brand, hours, loaded, freshOrderIds],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

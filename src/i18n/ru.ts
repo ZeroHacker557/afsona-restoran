@@ -49,6 +49,7 @@ export const ru: Record<TranslationKey, string> = {
   // ── Меню ──
   'catalog.title': 'Меню',
   'catalog.filters': 'Фильтры',
+  'catalog.sortDefault': 'Порядок ресторана',
   'catalog.sortCheap': 'Сначала дешёвые',
   'catalog.sortExpensive': 'Сначала дорогие',
   'catalog.total': 'Всего {count} блюд',

@@ -661,6 +661,12 @@ a { color: inherit; text-decoration: none; }
 }
 .filter-button:hover { border-color: var(--brand-line); }
 .filter-button:active { transform: scale(0.97); }
+/* Saralash asosiy holatdan chiqqanini bildirib turadi */
+.filter-button.is-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
 
 /* ====== Order Card ====== */
 .order-card {

@@ -27,7 +27,16 @@ export type AdminData = {
   payment: PaymentSettings
   brand: BrandSettings
   hours: WorkingHours
+  /** Umumiy: taomlar va buyurtmalar keldimi. */
   loading: boolean
+  /** Har bir kolleksiya alohida — skeletlarni shu bo'yicha ko'rsatamiz. */
+  loaded: {
+    products: boolean
+    categories: boolean
+    orders: boolean
+    promos: boolean
+    users: boolean
+  }
   /** Sahifa ochilgandan keyin kelgan yangi buyurtmalar (belgilash uchun). */
   freshOrderIds: string[]
   markOrdersSeen: () => void

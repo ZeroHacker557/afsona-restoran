@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
+  Ban,
   Banknote,
   CreditCard,
+  GripVertical,
   LayoutGrid,
   List,
   MapPin,
@@ -16,12 +18,18 @@ import {
 import { useAdminData } from '../lib/data-context'
 import { adminPost } from '../lib/api'
 import { Modal } from '../components/Modal'
-import { Chip, ConfirmBar, Empty, Spinner } from '../components/ui'
+import { Chip, ConfirmBar, Empty, RowsSkeleton, Spinner } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { formatDateTime, money, timeAgo } from '../lib/format'
 import { buildReceiptHtml } from '../lib/receipt'
 import type { AdminOrder } from '../lib/db'
-import { ALL_STATUSES, ORDER_FLOW as FLOW, STATUS_STYLE } from '../lib/status'
+import {
+  ALL_STATUSES,
+  CANCEL_REASONS,
+  CANCEL_STATUSES,
+  ORDER_FLOW as FLOW,
+  STATUS_STYLE,
+} from '../lib/status'
 import { useNow } from '../lib/now'
 
 const PERIODS = [
@@ -34,14 +42,78 @@ const PERIODS = [
 type Period = (typeof PERIODS)[number]['id']
 
 export function OrdersPage() {
-  const { orders, freshOrderIds, markOrdersSeen } = useAdminData()
+  const { orders, loaded, freshOrderIds, markOrdersSeen } = useAdminData()
   const [view, setView] = useState<'board' | 'list'>('board')
-  const [period, setPeriod] = useState<Period>('7')
+  const [period, setPeriod] = useState<Period>('today')
   const [status, setStatus] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<AdminOrder | null>(null)
 
+  /** Sudralayotgan buyurtma id'si. */
+  const [dragId, setDragId] = useState<string | null>(null)
+  /** Karta ustida turgan ustun — tashlash joyini ko'rsatish uchun. */
+  const [overColumn, setOverColumn] = useState<string | null>(null)
+  /**
+   * Server javobini kutayotgan ko'chirishlar. Firestore yangilanishi ~0.5s
+   * keladi — shu vaqtda karta eski ustunda qolsa, sudrash "ishlamadi"
+   * degan taassurot qoladi. Shuning uchun darhol ko'chiramiz.
+   *
+   * `from` — sudrash boshlanganidagi status. U shart: yozuv faqat hujjat
+   * HALI O'ZGARMAGAN paytda kuchda bo'ladi. Aks holda eski yozuv keyinroq
+   * qayta jonlanib qoladi — masalan admin «Qabul qilindi» ga sudraganidan
+   * keyin kuryer «Oldim» bosib statusni «Yetkazilmoqda» qilsa, karta
+   * orqaga, «Qabul qilindi» ustuniga tortilib turaverardi.
+   */
+  const [pending, setPending] = useState<Record<string, { from: string; to: string }>>({})
+
   const now = useNow()
+
+  /**
+   * Faqat hali yetib kelmagan o'zgarishlar. Hujjat qaysidir yo'l bilan
+   * o'zgargan bo'lsa — bizning so'rovimiz bilanmi, kuryer tugmasi
+   * bilanmi, boshqa admin bilanmi — optimistik qiymat kuchini yo'qotadi
+   * va haqiqiy status ko'rsatiladi.
+   */
+  const activePending = useMemo(() => {
+    const result: Record<string, string> = {}
+    Object.entries(pending).forEach(([id, move]) => {
+      const found = orders.find((order) => order.id === id)
+      if (found && found.status === move.from) result[id] = move.to
+    })
+    return result
+  }, [pending, orders])
+
+  /** Ko'rsatiladigan status — optimistik qiymat ustun turadi. */
+  const statusOf = (order: AdminOrder) => activePending[order.id] ?? order.status
+
+  /** Kartani boshqa ustunga tashlash. */
+  async function moveTo(orderId: string, status: string) {
+    const order = orders.find((item) => item.id === orderId)
+    if (!order || order.status === status) return
+
+    // Yangi sudrashda eskirgan yozuvlarni ham tozalab ketamiz
+    setPending((current) => {
+      const next: typeof current = {}
+      Object.entries(current).forEach(([id, move]) => {
+        const found = orders.find((item) => item.id === id)
+        if (found && found.status === move.from) next[id] = move
+      })
+      next[orderId] = { from: order.status, to: status }
+      return next
+    })
+    try {
+      await adminPost('order.status', { orderId, status })
+      toast(`${order.orderNumber} → ${status}. Mijozga xabar yuborildi`)
+    } catch (error) {
+      toastError(error)
+      // Xato bo'lsa karta o'z joyiga qaytadi
+      setPending((current) => {
+        const next = { ...current }
+        delete next[orderId]
+        return next
+      })
+    }
+  }
 
   const filtered = useMemo(() => {
     const startOfToday = new Date(now)
@@ -140,14 +212,48 @@ export function OrdersPage() {
 
       {filtered.length === 0 ? (
         <div className="adm-card">
-          <Empty text="Bu shartlarga mos buyurtma yo'q" />
+          {!loaded.orders ? (
+            <RowsSkeleton rows={6} />
+          ) : (
+            <Empty text="Bu shartlarga mos buyurtma yo'q" />
+          )}
         </div>
       ) : view === 'board' ? (
+        <>
+        <div className="adm-board-hint">
+          <GripVertical size={13} />
+          Kartani ustunlar orasida sudrab statusni o'zgartirish mumkin
+        </div>
         <div className="adm-board">
           {FLOW.map((column) => {
-            const items = filtered.filter((order) => order.status === column)
+            const items = filtered.filter((order) => statusOf(order) === column)
+            // Sudralayotgan karta o'z ustuni ustida bo'lsa ta'kidlash keraksiz
+            const dragged = dragId ? orders.find((order) => order.id === dragId) : null
+            const isTarget = overColumn === column && !!dragged && statusOf(dragged) !== column
             return (
-              <div key={column} className="adm-column">
+              <div
+                key={column}
+                className={`adm-column ${isTarget ? 'drop-target' : ''}`}
+                onDragOver={(event) => {
+                  if (!dragId) return
+                  // preventDefault bo'lmasa brauzer tashlashga ruxsat bermaydi
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                  setOverColumn(column)
+                }}
+                onDragLeave={(event) => {
+                  // Ichki elementga o'tganda ham dragleave keladi — tekshiramiz
+                  if (event.currentTarget.contains(event.relatedTarget as Node)) return
+                  setOverColumn((current) => (current === column ? null : current))
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  const id = dragId || event.dataTransfer.getData('text/plain')
+                  setOverColumn(null)
+                  setDragId(null)
+                  if (id) void moveTo(id, column)
+                }}
+              >
                 <div className="flex items-center justify-between px-1 pb-1">
                   <span className="text-sm font-bold">{column}</span>
                   <span className="text-xs font-bold" style={{ color: 'var(--muted)' }}>
@@ -157,7 +263,25 @@ export function OrdersPage() {
                 {items.map((order) => (
                   <button
                     key={order.id}
-                    className={`adm-order-card ${fresh.has(order.id) ? 'fresh' : ''}`}
+                    draggable
+                    className={[
+                      'adm-order-card adm-clickable adm-draggable',
+                      fresh.has(order.id) ? 'fresh' : '',
+                      dragId === order.id ? 'dragging' : '',
+                      pending[order.id] ? 'pending' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onDragStart={(event) => {
+                      setDragId(order.id)
+                      event.dataTransfer.effectAllowed = 'move'
+                      // Firefox sudrashni boshlashi uchun ma'lumot shart
+                      event.dataTransfer.setData('text/plain', order.id)
+                    }}
+                    onDragEnd={() => {
+                      setDragId(null)
+                      setOverColumn(null)
+                    }}
                     onClick={() => {
                       setSelected(order)
                       markOrdersSeen()
@@ -196,6 +320,7 @@ export function OrdersPage() {
             )
           })}
         </div>
+        </>
       ) : (
         <div className="adm-card adm-table-wrap">
           <table className="adm-table">
@@ -216,6 +341,7 @@ export function OrdersPage() {
                 return (
                   <tr
                     key={order.id}
+                    className="adm-row-hover"
                     onClick={() => setSelected(order)}
                     style={{ cursor: 'pointer' }}
                   >
@@ -266,17 +392,40 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
   const [busy, setBusy] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  async function setStatus(status: string) {
+  /** Sabab so'ralayotgan status ("Bekor qilingan" yoki "Rad etildi"). */
+  const [askFor, setAskFor] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
+  /** «Boshqa» tanlanganda yoziladigan erkin matn. */
+  const [customReason, setCustomReason] = useState('')
+
+  async function setStatus(status: string, cancelReason?: string) {
     setBusy(status)
     try {
-      await adminPost('order.status', { orderId: order.id, status })
+      await adminPost('order.status', { orderId: order.id, status, cancelReason })
       toast(`Status: ${status}. Mijozga xabar yuborildi`)
+      setAskFor(null)
     } catch (error) {
       toastError(error)
     } finally {
       setBusy('')
     }
   }
+
+  /**
+   * Bekor qilishda darhol emas, avval sabab so'raymiz. Sabab mijozga
+   * ketadigan xabarga ham, hisobotga ham tushadi.
+   */
+  function pickStatus(status: string) {
+    if (CANCEL_STATUSES.has(status)) {
+      setAskFor(status)
+      setReason('')
+      setCustomReason('')
+      return
+    }
+    void setStatus(status)
+  }
+
+  const chosenReason = reason === 'other' ? customReason.trim() : reason
 
   async function setPayment(paymentStatus: string) {
     setBusy(paymentStatus)
@@ -359,6 +508,15 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
         </span>
       </div>
 
+      {!!order.cancelReason && (
+        <div className="adm-note-danger">
+          <Ban size={15} className="mt-0.5 shrink-0" />
+          <span>
+            <b>Sabab:</b> {order.cancelReason}
+          </span>
+        </div>
+      )}
+
       {/* Status tugmalari */}
       <div>
         <span className="adm-label">Statusni o'zgartirish</span>
@@ -366,8 +524,10 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
           {ALL_STATUSES.map((item) => (
             <button
               key={item}
-              className={`adm-btn sm ${item === order.status ? 'primary' : ''}`}
-              onClick={() => setStatus(item)}
+              className={`adm-btn sm ${item === order.status ? 'primary' : ''} ${
+                askFor === item ? 'danger' : ''
+              }`}
+              onClick={() => pickStatus(item)}
               disabled={!!busy || item === order.status}
             >
               {busy === item ? <Spinner /> : null}
@@ -375,7 +535,59 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
             </button>
           ))}
         </div>
-        <p className="adm-hint">Status o'zgarganda mijozga Telegram xabari avtomatik ketadi.</p>
+
+        {askFor ? (
+          <div className="adm-reason">
+            <span className="adm-label">«{askFor}» — sabab</span>
+            <div className="flex flex-wrap gap-2">
+              {CANCEL_REASONS.map((item) => (
+                <button
+                  key={item}
+                  className={`adm-btn sm ${reason === item ? 'primary' : ''}`}
+                  onClick={() => setReason(item)}
+                >
+                  {item}
+                </button>
+              ))}
+              <button
+                className={`adm-btn sm ${reason === 'other' ? 'primary' : ''}`}
+                onClick={() => setReason('other')}
+              >
+                Boshqa
+              </button>
+            </div>
+
+            {reason === 'other' && (
+              <input
+                className="adm-input mt-2"
+                placeholder="Sababni qisqacha yozing"
+                maxLength={160}
+                autoFocus
+                value={customReason}
+                onChange={(event) => setCustomReason(event.target.value)}
+              />
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                className="adm-btn danger"
+                disabled={!chosenReason || !!busy}
+                onClick={() => setStatus(askFor, chosenReason)}
+              >
+                {busy === askFor ? <Spinner /> : null}
+                Tasdiqlash
+              </button>
+              <button className="adm-btn ghost" onClick={() => setAskFor(null)} disabled={!!busy}>
+                Bekor
+              </button>
+            </div>
+            <p className="adm-hint">
+              Sabab mijozga ketadigan xabarda ko'rinadi va statistikaga yoziladi.
+            </p>
+          </div>
+        ) : (
+          <p className="adm-hint">Status o'zgarganda mijozga Telegram xabari avtomatik ketadi.</p>
+        )}
       </div>
 
       {/* Mijoz */}

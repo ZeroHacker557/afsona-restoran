@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { Clock, CreditCard, Save, Store, Truck } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Clock, CreditCard, Save, Smartphone, Store, Truck } from 'lucide-react'
 import { useAdminData } from '../lib/data-context'
 import { saveSetting } from '../lib/db'
 import { Field, Spinner, Switch } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { DAY_NAMES_UZ, getOpenState, type WorkingHours } from '../../utils/hours'
 import { BRAND } from '../../config/brand'
+import { canInstall, isInstalled, onInstallStateChange, promptInstall } from '../lib/install'
 
 export function SettingsPage() {
   return (
@@ -14,6 +15,7 @@ export function SettingsPage() {
       <div className="flex flex-col gap-4">
         <DeliveryCard />
         <PaymentCard />
+        <InstallCard />
       </div>
       <BrandCard />
     </div>
@@ -389,6 +391,96 @@ function BrandCard() {
             Bu ma'lumotlar mijoz ilovasidagi «Yordam» sahifasida ko'rinadi.
           </p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ── Ilova qilib o'rnatish (PWA) ──────────────────────────────
+
+/**
+ * Panelni telefon yoki kompyuterga ilova sifatida o'rnatish.
+ *
+ * Nega kerak: restoran egasi panelni kuniga o'nlab marta ochadi.
+ * Brauzerdan manzil yozib kirish o'rniga ekrandagi belgini bosadi —
+ * manzil qatorisiz, to'liq ekranda, alohida oynada ochiladi.
+ */
+function InstallCard() {
+  const [installed, setInstalled] = useState(isInstalled)
+  const [ready, setReady] = useState(canInstall)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => onInstallStateChange(() => {
+    setReady(canInstall())
+    setInstalled(isInstalled())
+  }), [])
+
+  async function install() {
+    setBusy(true)
+    try {
+      const accepted = await promptInstall()
+      if (accepted) {
+        setInstalled(true)
+        toast("O'rnatildi — endi ekrandagi belgidan ochasiz")
+      }
+    } catch (error) {
+      toastError(error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="adm-card">
+      <div className="adm-card-head">
+        <span className="flex items-center gap-2">
+          <Smartphone size={16} /> Ilova qilib o'rnatish
+        </span>
+      </div>
+
+      <div className="p-4">
+        {installed ? (
+          <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--success)' }}>
+            <Check size={16} />
+            Panel ilova sifatida o'rnatilgan.
+          </p>
+        ) : ready ? (
+          <>
+            <p className="mb-3 text-sm" style={{ color: 'var(--muted)' }}>
+              Panel telefon yoki kompyuter ekraniga ilova bo'lib tushadi:
+              brauzer manzil qatorisiz, to'liq ekranda ochiladi.
+            </p>
+            <button className="adm-btn primary" onClick={install} disabled={busy}>
+              {busy ? <Spinner /> : <Smartphone size={16} />}
+              O'rnatish
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+              Brauzer hozircha o'rnatishni taklif qilmadi. Qo'lda o'rnatish:
+            </p>
+            <ul className="adm-install-steps">
+              <li>
+                <b>Android (Chrome):</b> yuqoridagi ⋮ menyusi → «Ilovani o'rnatish»
+                yoki «Bosh ekranga qo'shish»
+              </li>
+              <li>
+                <b>iPhone (Safari):</b> pastdagi «Ulashish» belgisi →
+                «Bosh ekranga qo'shish»
+              </li>
+              <li>
+                <b>Kompyuter (Chrome / Edge):</b> manzil qatorining o'ng chekkasidagi
+                o'rnatish belgisi
+              </li>
+            </ul>
+            <p className="adm-hint">
+              O'rnatish faqat haqiqiy domenda (https) ishlaydi — mahalliy
+              serverda taklif chiqmasligi mumkin.
+            </p>
+          </>
+        )}
       </div>
     </div>
   )

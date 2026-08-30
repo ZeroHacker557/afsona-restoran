@@ -50,6 +50,7 @@ export const uz = {
   // ── Menyu ──
   'catalog.title': 'Menyu',
   'catalog.filters': 'Filtrlar',
+  'catalog.sortDefault': 'Restoran tartibi',
   'catalog.sortCheap': 'Arzon narx',
   'catalog.sortExpensive': 'Qimmat narx',
   'catalog.total': 'Jami {count} ta taom',
