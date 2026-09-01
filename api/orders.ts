@@ -2,7 +2,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
 import { getOpenState, readHours } from './_lib/hours.js'
-import { notifyCouriersNewOrder } from './_lib/courier.js'
 
 const ORDER_NUMBER_START = 1000
 
@@ -335,24 +334,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     })
 
-    // ── Adminlarga xabar ───────────────────────────────────────
-    // Ilgari buni bot (shaxsiy kompyuterda) qilardi; endi shu yerda
-    // yuboriladi — kompyuter yoqiq turishi shart emas.
-    if (!result.duplicate) {
-      try {
-        const snap = await db.collection('orders').doc(result.id).get()
-        const order = { ...snap.data(), id: snap.id }
+    /*
+       Bu yerda kuryerlarga xabar YUBORILMAYDI.
 
-        // Buyurtma kuryerlarga va xodimlar guruhiga tugmalari bilan
-        // boradi. Adminga alohida xabar yuborilmaydi: u buyurtmani
-        // panelda (ovozli signal bilan) va guruhda ko'radi.
-        const sent = await notifyCouriersNewOrder(order)
-        if (sent > 0) await snap.ref.update({ notified: true })
-      } catch (error) {
-        // Xabar ketmasa ham buyurtma yaratilgan — mijozga muvaffaqiyat
-        console.error('[orders] kuryer xabarnomasi:', error)
-      }
-    }
+       Yangi buyurtmani admin panelda ko'radi (ovozli signal bilan).
+       Kuryerlarga esa xabar admin «Qabul qilindi» bosganda ketadi —
+       `api/admin.ts` dagi `handleOrderStatus` ichida.
+
+       Nega shunday: tasdiqlanmagan buyurtmada kuryer uchun tugma yo'q,
+       ya'ni bu xabar unga hech qanday ish bermaydi — faqat guruhni
+       to'ldiradi. Bundan ham muhimi, ilgari tasdiqlangach o'sha xabar
+       tahrirlanardi, Telegram esa tahrir uchun bildirishnoma bermaydi:
+       tugma jimgina paydo bo'lib, kuryer ko'rmay qolardi.
+    */
 
     return res.status(200).json(result)
   } catch (error) {

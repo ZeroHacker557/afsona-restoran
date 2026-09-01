@@ -13,6 +13,7 @@ import {
   bindGroup,
   findCourier,
   handleCourierAction,
+  notifyCouriersNewOrder,
   readCourierSettings,
   syncCourierMessages,
 } from './_lib/courier.js'
@@ -473,8 +474,29 @@ async function handleOrderStatus(req: VercelRequest, res: VercelResponse) {
 
   const updated = { ...order.data, status, cancelReason: patch.cancelReason as string }
   await notifyCustomerStatus(updated, status)
-  // Guruhdagi/kuryerdagi xabar ham yangilansin — eskirgan tugma qolmasin
-  await syncCourierMessages(updated)
+
+  /*
+     Kuryerlarga xabar ayni shu yerda — buyurtma yaratilganda emas — ketadi.
+
+     Nega: ilgari buyurtma tushishi bilan guruhga tugmasiz xabar borar,
+     admin tasdiqlagach esa o'sha xabar TAHRIRLANARDI. Telegram tahrir
+     uchun bildirishnoma bermaydi, shuning uchun «Oldim» tugmasi chatning
+     yuqorisida jimgina paydo bo'lardi va kuryer ko'rmay qolardi.
+
+     Endi xabar birinchi marta aynan ish boshlanadigan paytda, yangi
+     xabar sifatida yuboriladi — ovoz chiqadi. Bekor qilingan buyurtma
+     esa kuryerlarni umuman bezovta qilmaydi.
+  */
+  const alreadySent = Array.isArray(order.data.courierMsgs) && order.data.courierMsgs.length > 0
+  const actionable = status !== 'Yangi' && !cancelled
+
+  if (!alreadySent && actionable) {
+    const sent = await notifyCouriersNewOrder(updated)
+    if (sent > 0) await order.ref.update({ notified: true })
+  } else {
+    // Xabar allaqachon ketgan — eskirgan tugma qolmasin
+    await syncCourierMessages(updated)
+  }
 
   return res.status(200).json({ ok: true })
 }
