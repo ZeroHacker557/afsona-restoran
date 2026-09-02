@@ -1,0 +1,24 @@
+{
+  "//": "Firestore composite indekslari. Chiqarish: node scripts/deploy-indexes.mjs",
+  "//2": "Bitta maydonli indekslarni Firestore o'zi yaratadi — bu yerda faqat ikki va undan ortiq maydonlilari.",
+  "indexes": [
+    {
+      "//": "Mijozning bildirishnomalari: eng yangisidan, chegara bilan. Busiz butun tarix yuklanardi.",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Mijozning buyurtmalari: eng yangisidan, chegara bilan.",
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ]
+}

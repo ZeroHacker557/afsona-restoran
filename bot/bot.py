@@ -33,7 +33,6 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import API_BASE_URL, BOT_API_SECRET, BOT_TOKEN, MINI_APP_URL
-import firebase_db as db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -133,37 +132,48 @@ def contact_kb() -> ReplyKeyboardMarkup:
 
 # ─── Yordamchi ────────────────────────────────────────────────
 
-def brand_info() -> dict:
-    """Aloqa ma'lumotlari — admin panelda kiritiladi (settings/brand)."""
-    try:
-        snap = db.db.collection("settings").document("brand").get()
-        return snap.to_dict() or {} if snap.exists else {}
-    except Exception as e:
-        logger.warning(f"[BRAND] o'qib bo'lmadi: {e}")
-        return {}
+# Restoran ma'lumoti kam o'zgaradi — har xabarda so'ramaymiz
+INFO_TTL = 120  # sekund
+_info_cache: dict = {"data": {}, "at": 0.0}
 
 
-def working_hours_text() -> str:
-    """settings/hours hujjatidan bugungi ish vaqti."""
-    try:
-        snap = db.db.collection("settings").document("hours").get()
-        data = snap.to_dict() or {} if snap.exists else {}
-        if not data.get("enabled"):
-            return "Har kuni, kun bo'yi"
-        if data.get("temporarilyClosed"):
-            return "Hozircha yopiq"
+async def bot_info() -> dict:
+    """
+    Restoran aloqasi va ish vaqti — API orqali.
 
-        days = data.get("days") or []
-        # Yakshanbadan boshlanadigan tartib (JS getDay bilan bir xil)
-        import datetime
-        index = (datetime.datetime.now().weekday() + 1) % 7
-        day = days[index] if index < len(days) else None
-        if not day or day.get("closed"):
-            return "Bugun dam olish kuni"
-        return f"{day.get('open', '09:00')} — {day.get('close', '23:00')}"
-    except Exception as e:
-        logger.warning(f"[HOURS] o'qib bo'lmadi: {e}")
+    Ilgari bot Firestore'ga to'g'ridan-to'g'ri murojaat qilardi va shu
+    sababli unga Firebase service account kaliti kerak bo'lardi. Endi
+    ma'lumot API'dan keladi, bot esa hech qanday Firebase kalitini
+    bilmaydi.
+
+    Ma'lumot kam o'zgaradi — qisqa muddatga keshlanadi.
+    """
+    now = asyncio.get_event_loop().time()
+    if _info_cache["at"] and now - _info_cache["at"] < INFO_TTL:
+        return _info_cache["data"]
+
+    data = await _api("bot.info", {})
+    if data.get("ok"):
+        _info_cache["data"] = data
+        _info_cache["at"] = now
+    return data
+
+
+async def brand_info() -> dict:
+    """Aloqa ma'lumotlari — admin panelda kiritiladi."""
+    return (await bot_info()).get("brand") or {}
+
+
+async def working_hours_text() -> str:
+    """Bugungi ish vaqti — matn ko'rinishida."""
+    hours = (await bot_info()).get("hours") or {}
+    if not hours:
         return "—"
+    if not hours.get("enabled"):
+        return "Har kuni, kun bo'yi"
+    if hours.get("temporarilyClosed"):
+        return "Hozircha yopiq"
+    return hours.get("todayText") or "—"
 
 
 # ─── /start ──────────────────────────────────────────────────
@@ -182,7 +192,7 @@ async def cmd_start(message: Message):
 
     # Telefon raqami hali saqlanmagan bo'lsa, bir bosishda so'raymiz.
     # Mini app buni buyurtma formasiga avtomatik qo'yadi.
-    saved = db.get_user(user.id) or {}
+    saved = await _api("bot.user", {"userId": user.id})
     if not saved.get("phone"):
         await message.answer(
             "📱 <b>Telefon raqamingizni qoldiring</b>\n\n"
@@ -210,7 +220,8 @@ async def handle_contact(message: Message):
     if not phone.startswith("+"):
         phone = f"+{phone}"
 
-    if db.set_user_phone(message.from_user.id, phone):
+    saved = await _api("bot.phone", {"userId": message.from_user.id, "phone": phone})
+    if saved.get("ok"):
         await message.answer(
             f"✅ Raqamingiz saqlandi: <code>{phone}</code>\n\n"
             "Endi buyurtma berishda u avtomatik to'ldiriladi.",
@@ -274,7 +285,7 @@ async def handle_my_orders(message: Message):
 
 @dp.message(F.text == "📞 Biz bilan aloqa")
 async def cmd_contact(message: Message):
-    info = brand_info()
+    info = await brand_info()
     name = info.get("name") or RESTAURANT_NAME
 
     lines = [f"📞 <b>{name} — biz bilan bog'lanish:</b>", ""]
@@ -286,7 +297,7 @@ async def cmd_contact(message: Message):
         lines.append(f"✉️ <b>Email:</b> {info['email']}")
     if info.get("address"):
         lines.append(f"📍 <b>Manzil:</b> {info['address']}")
-    lines.append(f"⏰ <b>Bugungi ish vaqti:</b> {working_hours_text()}")
+    lines.append(f"⏰ <b>Bugungi ish vaqti:</b> {await working_hours_text()}")
     lines.append("")
     lines.append("<i>Savollaringiz bo'lsa, bemalol murojaat qiling!</i>")
 

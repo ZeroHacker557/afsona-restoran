@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
@@ -9,6 +10,8 @@ import {
   normalizeEmail,
   requireAdmin,
 } from './_lib/admin-auth.js'
+import { getOpenState, readHours } from './_lib/hours.js'
+import { adjustStock, CANCELLED_STATUSES } from './_lib/stock.js'
 import {
   bindGroup,
   findCourier,
@@ -79,6 +82,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'courier.action') return await handleCourierButton(req, res)
     if (action === 'courier.group') return await handleCourierGroup(req, res)
     if (action === 'channel.bind') return await handleChannelBind(req, res)
+    if (action === 'bot.info') return await handleBotInfo(req, res)
+    if (action === 'bot.user') return await handleBotUser(req, res)
+    if (action === 'bot.phone') return await handleBotPhone(req, res)
 
     const admin = await requireAdmin(req, res)
     if (!admin) return
@@ -167,15 +173,56 @@ async function handleSession(req: VercelRequest, res: VercelResponse) {
 }
 
 /**
- * Birinchi adminni yaratadi. ADMIN_SETUP_KEY env kaliti bilan himoyalangan —
- * u faqat egada bo'ladi va parol yo'qolganda tiklash uchun ham ishlaydi.
+ * BIRINCHI adminni yaratadi — bir martalik ishga tushirish amali.
+ *
+ * Bu amal `requireAdmin` dan oldin ishlaydi, uni faqat ADMIN_SETUP_KEY
+ * himoya qiladi. Shuning uchun uchta cheklov qo'yilgan:
+ *
+ *  1. Admin allaqachon mavjud bo'lsa — umuman rad etiladi. Ilgari bu
+ *     amal mavjud foydalanuvchining PAROLINI ALMASHTIRA olardi: kalitni
+ *     bilgan odam eganing hisobini egallab olishi mumkin edi.
+ *  2. Kalit doimiy vaqtda solishtiriladi (vaqt bo'yicha sizib chiqmasin).
+ *  3. Ketma-ket noto'g'ri urinishlar sekinlashtiriladi — kalitni tanlab
+ *     ko'rish amaliy bo'lmaydi.
+ *
+ * Parolni tiklash uchun endi Firebase Console yoki paneldagi
+ * «Adminlar → parolni o'zgartirish» ishlatiladi.
  */
+let seedFailures = 0
+let seedBlockedUntil = 0
+
 async function handleSeed(req: VercelRequest, res: VercelResponse) {
   const body = req.body as { key?: string; email?: string; password?: string }
   const expected = process.env.ADMIN_SETUP_KEY
 
   if (!expected) return fail(res, 500, 'ADMIN_SETUP_KEY sozlanmagan')
-  if (String(body?.key || '') !== expected) return fail(res, 403, 'Kalit noto‘g‘ri')
+
+  if (Date.now() < seedBlockedUntil) {
+    return fail(res, 429, 'Juda ko‘p urinish. Biroz kutib, qayta urining')
+  }
+
+  const given = String(body?.key || '')
+  const ok =
+    given.length === expected.length &&
+    timingSafeEqual(Buffer.from(given), Buffer.from(expected))
+
+  if (!ok) {
+    seedFailures++
+    // Uchtadan keyin — bir daqiqa kutish
+    if (seedFailures >= 3) seedBlockedUntil = Date.now() + 60_000
+    return fail(res, 403, 'Kalit noto‘g‘ri')
+  }
+  seedFailures = 0
+
+  // Eng muhim cheklov: admin bor bo'lsa, bu yo'l yopiq
+  const existing = await allowedAdminEmails()
+  if (existing.size > 0) {
+    return fail(
+      res,
+      409,
+      'Admin allaqachon mavjud. Yangi admin qo‘shish uchun panelga kiring: /admin → Adminlar',
+    )
+  }
 
   const email = normalizeEmail(body?.email)
   const password = String(body?.password || '')
@@ -321,37 +368,47 @@ async function handleRecipients(req: VercelRequest, res: VercelResponse) {
   const segment = String((req.body as { segment?: string })?.segment || 'all') as Segment
   const db = await adminDb()
 
-  const usersSnap = await db.collection('users').get()
-  const now = Date.now()
   const DAY = 24 * 60 * 60 * 1000
+  const cutoff = (days: number) => new Date(Date.now() - days * DAY).toISOString()
 
-  let buyerIds: Set<number> | null = null
-  if (segment === 'buyers' || segment === 'nonbuyers') {
-    buyerIds = new Set()
-    const ordersSnap = await db.collection('orders').select('userId').get()
-    ordersSnap.forEach((doc) => {
-      const id = Number(doc.data()?.userId)
-      if (Number.isFinite(id)) buyerIds!.add(id)
-    })
+  /*
+     Segmentni imkon qadar FIRESTORE hisoblaydi, kod emas.
+
+     Ilgari bu funksiya butun `users` kolleksiyasini to'liq hujjatlari
+     bilan o'qir, «xarid qilganlar» segmentida esa ustiga BUTUN `orders`
+     kolleksiyasini ham o'qirdi. Buyurtmalar eng tez o'sadigan to'plam —
+     1000 mijoz va 10 000 buyurtmada bu bitta tugma bosish uchun 11 000
+     o'qish degani edi.
+
+     Endi:
+       • buyurtmalar umuman o'qilmaydi — mijozda `hasOrders` bayrog'i bor
+         (`api/orders.ts` uni buyurtma yaratilganda qo'yadi);
+       • faollik sanasi so'rovda filtrlanadi (bitta maydon — indeks
+         avtomatik);
+       • hujjatdan faqat kerakli maydonlar olinadi (`select`), ya'ni
+         ism, rasm va manzillar umuman tashilmaydi.
+  */
+  let query: FirebaseFirestore.Query = db.collection('users')
+
+  if (segment === 'active7') {
+    query = query.where('lastActive', '>=', cutoff(7))
+  } else if (segment === 'inactive30') {
+    query = query.where('lastActive', '<', cutoff(30))
+  } else if (segment === 'buyers') {
+    query = query.where('hasOrders', '==', true)
   }
+  // `nonbuyers` — Firestore "maydon yo'q" ni tenglik bilan topa olmaydi,
+  // shuning uchun u faqat shu segmentda kodda filtrlanadi.
+
+  const usersSnap = await query.select('id', 'hasOrders').get()
 
   const ids: number[] = []
   usersSnap.forEach((doc) => {
     const data = doc.data() || {}
     const id = Number(data.id ?? doc.id)
     if (!Number.isFinite(id) || id === 0) return
-
-    const last = Date.parse(String(data.lastActive || '')) || 0
-    const age = last ? now - last : Number.POSITIVE_INFINITY
-
-    const keep =
-      segment === 'active7' ? age <= 7 * DAY
-      : segment === 'inactive30' ? age > 30 * DAY
-      : segment === 'buyers' ? buyerIds!.has(id)
-      : segment === 'nonbuyers' ? !buyerIds!.has(id)
-      : true
-
-    if (keep) ids.push(id)
+    if (segment === 'nonbuyers' && data.hasOrders === true) return
+    ids.push(id)
   })
 
   return res.status(200).json({ ok: true, segment, count: ids.length, ids })
@@ -465,14 +522,70 @@ async function handleOrderStatus(req: VercelRequest, res: VercelResponse) {
   const order = await loadOrder(orderId)
   if (!order) return fail(res, 404, 'Buyurtma topilmadi')
 
-  const cancelled = status === 'Bekor qilingan' || status === 'Rad etildi'
-  const patch: Record<string, unknown> = { status, statusUpdatedAt: new Date().toISOString() }
-  // Statusdan qaytib chiqilsa eski sabab qolib ketmasin
-  patch.cancelReason = cancelled ? cancelReason : ''
+  const cancelled = CANCELLED_STATUSES.has(status)
+  const wasCancelled = CANCELLED_STATUSES.has(String(order.data.status || ''))
+  const restoredBefore = order.data.stockRestored === true
 
-  await order.ref.update(patch)
+  /*
+     Status o'zgarishi va ombor qoldig'i BIR tranzaksiyada bo'ladi.
 
-  const updated = { ...order.data, status, cancelReason: patch.cancelReason as string }
+     Ilgari bekor qilinganda qoldiq qaytarilmasdi (buni faqat mijozning
+     o'z bekor qilishi qilardi). Natijada har bekor qilingan buyurtma
+     qoldiqni yeb ketardi va taom oxir-oqibat o'zi stop-listga tushib,
+     sotuvdan chiqib qolardi — restoran esa sababini bilmasdi.
+
+     `stockRestored` bayrog'i ikki tomonlama hisobni to'sadi: qoldiq bir
+     marta qaytariladi, buyurtma bekor holatidan qaytarilsa — qaytadan
+     kamaytiriladi.
+  */
+  const db = await adminDb()
+  await db.runTransaction(async (tx) => {
+    // Firestore qoidasi: barcha o'qishlar yozishlardan oldin
+    let restoredNow = restoredBefore
+    if (cancelled && !restoredBefore) {
+      await adjustStock(tx, db, order.data, 1)
+      restoredNow = true
+    } else if (!cancelled && wasCancelled && restoredBefore) {
+      await adjustStock(tx, db, order.data, -1)
+      restoredNow = false
+    }
+
+    tx.update(order.ref, {
+      status,
+      statusUpdatedAt: new Date().toISOString(),
+      // Statusdan qaytib chiqilsa eski sabab qolib ketmasin
+      cancelReason: cancelled ? cancelReason : '',
+      stockRestored: restoredNow,
+    })
+
+    /*
+       Buyurtma yetkazilgach, mijoz nimani sotib olganini belgilab
+       qo'yamiz: `users/{id}/purchased/{taomId}`.
+
+       Bu sharh qoldirish huquqini tekshirish uchun kerak. Busiz
+       `api/reviews.ts` mijozning BARCHA yetkazilgan buyurtmalarini
+       o'qib chiqishga majbur edi — endi bitta hujjat yetarli.
+    */
+    const userId = Number(order.data.userId)
+    if (status === 'Yetkazildi' && userId) {
+      const userRef = db.collection('users').doc(String(userId))
+      const items = Array.isArray(order.data.products) ? order.data.products : []
+      const seen = new Set<string>()
+
+      for (const item of items) {
+        const productId = String((item?.product as { id?: unknown } | undefined)?.id ?? '').trim()
+        if (!productId || seen.has(productId)) continue
+        seen.add(productId)
+        tx.set(
+          userRef.collection('purchased').doc(productId),
+          { productId, at: new Date().toISOString() },
+          { merge: true },
+        )
+      }
+    }
+  })
+
+  const updated = { ...order.data, status, cancelReason: cancelled ? cancelReason : '' }
   await notifyCustomerStatus(updated, status)
 
   /*
@@ -616,6 +729,82 @@ async function handleCourierButton(req: VercelRequest, res: VercelResponse) {
 
   const result = await handleCourierAction(act, orderId, userId)
   return res.status(200).json(result)
+}
+
+/*
+   ── Bot uchun ma'lumot ────────────────────────────────────
+
+   Bot ilgari Firestore'ga TO'G'RIDAN-TO'G'RI murojaat qilardi va shu
+   sababli unga Firebase service account kaliti kerak bo'lardi — ya'ni
+   butun bazaga to'liq huquq beruvchi kalit bot serverida (Railway)
+   turardi.
+
+   Aslida botga atigi uchta narsa kerak edi: restoran aloqasi, ish vaqti
+   va foydalanuvchi telefoni. Ular endi shu API orqali beriladi, bot esa
+   Firebase'ni umuman bilmaydi.
+*/
+
+/** Restoran ma'lumoti va ish vaqti — bot xabarlari uchun. */
+async function handleBotInfo(req: VercelRequest, res: VercelResponse) {
+  if (!isBotRequest(req)) return fail(res, 403, 'Ruxsat yo‘q')
+
+  const db = await adminDb()
+  const [brandSnap, hoursSnap] = await Promise.all([
+    db.collection('settings').doc('brand').get(),
+    db.collection('settings').doc('hours').get(),
+  ])
+
+  const hours = readHours(hoursSnap.data())
+  const state = getOpenState(hours)
+
+  return res.status(200).json({
+    ok: true,
+    brand: brandSnap.data() || {},
+    hours: {
+      enabled: hours.enabled,
+      temporarilyClosed: hours.temporarilyClosed,
+      open: state.open,
+      todayText: state.todayText,
+    },
+  })
+}
+
+/** Foydalanuvchi profili — bot telefon saqlanganini bilishi uchun. */
+async function handleBotUser(req: VercelRequest, res: VercelResponse) {
+  if (!isBotRequest(req)) return fail(res, 403, 'Ruxsat yo‘q')
+
+  const userId = Number((req.body as { userId?: number | string })?.userId)
+  if (!Number.isFinite(userId) || userId === 0) return fail(res, 400, 'Foydalanuvchi noto‘g‘ri')
+
+  const snap = await (await adminDb()).collection('users').doc(String(userId)).get()
+  const data = snap.exists ? snap.data() || {} : {}
+
+  // Botga faqat kerakli maydonlar beriladi
+  return res.status(200).json({
+    ok: true,
+    exists: snap.exists,
+    phone: data.phone ? String(data.phone) : null,
+    firstName: data.first_name ? String(data.first_name) : null,
+  })
+}
+
+/** Telefon raqamini saqlaydi (bot kontakt tugmasi orqali oladi). */
+async function handleBotPhone(req: VercelRequest, res: VercelResponse) {
+  if (!isBotRequest(req)) return fail(res, 403, 'Ruxsat yo‘q')
+
+  const body = req.body as { userId?: number | string; phone?: string }
+  const userId = Number(body?.userId)
+  const phone = String(body?.phone || '').trim().slice(0, 40)
+
+  if (!Number.isFinite(userId) || userId === 0) return fail(res, 400, 'Foydalanuvchi noto‘g‘ri')
+  if (!phone) return fail(res, 400, 'Raqam bo‘sh')
+
+  await (await adminDb())
+    .collection('users')
+    .doc(String(userId))
+    .set({ id: userId, phone }, { merge: true })
+
+  return res.status(200).json({ ok: true, phone })
 }
 
 /** `/guruh` buyrug'i — xodimlar guruhini biriktiradi. */

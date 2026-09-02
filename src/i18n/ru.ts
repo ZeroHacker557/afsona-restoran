@@ -9,13 +9,10 @@ export const ru: Record<TranslationKey, string> = {
   'common.save': 'Сохранить',
   'common.saving': 'Сохранение...',
   'common.back': 'Назад',
-  'common.loading': 'Загрузка...',
-  'common.retry': 'Повторить',
   'common.close': 'Закрыть',
   'common.pcs': 'шт',
   'common.soon': 'скоро!',
   'common.optional': 'необязательно',
-  'common.required': 'обязательно',
   'common.saveFailed': 'Не удалось сохранить. Проверьте интернет и повторите',
   'common.notSignedIn': 'Вы не вошли в систему. Откройте приложение через Telegram',
 
@@ -55,26 +52,18 @@ export const ru: Record<TranslationKey, string> = {
   'catalog.total': 'Всего {count} блюд',
   'catalog.emptyCategory': 'В этой категории блюд нет',
   'catalog.emptyCategoryText': 'Выберите другую категорию.',
-  'catalog.filterSummary': 'Категория: {category} • Цена: {sort}',
-  'catalog.sortAsc': 'по возрастанию',
-  'catalog.sortDesc': 'по убыванию',
   'catalog.priceRange': 'Диапазон цен',
   'catalog.priceFrom': 'от',
   'catalog.priceTo': 'до',
-  'catalog.size': 'Порция',
-  'catalog.color': 'Вид',
   'catalog.inStockOnly': 'Только доступные блюда',
   'catalog.reset': 'Сбросить',
   'catalog.apply': 'Применить',
-  'catalog.activeFilters': 'фильтров: {count}',
   'catalog.loadMore': 'Показать ещё',
   'catalog.showing': '{shown} / {total}',
 
   // ── Блюдо ──
   'product.title': 'Блюдо',
   'product.fastDelivery': 'Быстрая доставка',
-  'product.chooseColor': 'Выберите вид',
-  'product.chooseSize': 'Выберите порцию',
   'product.about': 'О блюде',
   'product.addToCart': 'В корзину',
   'product.soldOut': 'Закончилось',
@@ -92,8 +81,6 @@ export const ru: Record<TranslationKey, string> = {
   'reviews.empty': 'Отзывов пока нет. Будьте первым!',
   'reviews.needRating': 'Пожалуйста, поставьте оценку звёздами',
   'reviews.error': 'Произошла ошибка',
-  'reviews.notPurchased': 'Чтобы оставить отзыв, сначала закажите это блюдо',
-  'reviews.alreadyLeft': 'Вы уже оставили отзыв на это блюдо',
   'reviews.thanks': 'Спасибо за отзыв!',
   'reviews.myTitle': 'Мои отзывы',
   'reviews.myEmpty': 'Отзывов нет',
@@ -229,8 +216,6 @@ export const ru: Record<TranslationKey, string> = {
   'profile.reviewsSub': 'Оставленные вами оценки',
   'profile.theme': 'Оформление',
   'profile.themeSub': 'Светлая или тёмная тема',
-  'theme.light': 'Светлая',
-  'theme.dark': 'Тёмная',
   'profile.language': 'Язык',
   'profile.languageSub': 'Изменить язык приложения',
   'profile.help': 'Помощь и поддержка',
@@ -243,10 +228,9 @@ export const ru: Record<TranslationKey, string> = {
   'profile.userNotFound': 'Пользователь Telegram не найден',
 
   // ── Язык ──
-  'language.title': 'Выберите язык',
   'language.uz': 'Узбекский',
   'language.ru': 'Русский',
-  'language.changed': 'Язык изменён',
+  'language.title': 'Выберите язык',
 
   // ── Адреса ──
   'address.title': 'Мои адреса',
@@ -271,10 +255,6 @@ export const ru: Record<TranslationKey, string> = {
   'notifications.emptyText': 'Пока для вас нет сообщений.',
 
   // ── Telegram ──
-  'gate.title': 'Откройте через Telegram',
-  'gate.text':
-    'Ресторан работает внутри Telegram. Откройте бота и нажмите «Открыть меню».',
-  'gate.button': 'Открыть в Telegram',
 
   // ── Ресторан закрыт ──
   'closed.title': 'Ресторан сейчас закрыт',

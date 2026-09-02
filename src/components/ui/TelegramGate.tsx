@@ -5,8 +5,10 @@ import { BRAND, BOT_URL, LOGO } from '../../config/brand'
  * Ilova Telegram tashqarisida ochilganda ko'rsatiladi.
  * Bu yerda hech qanday Firestore so'rovi yuborilmaydi (F-06).
  *
- * I18nProvider'dan tashqarida ishlashi mumkin, shuning uchun
- * matn ikkala tilda ham beriladi.
+ * Bu komponent `main.tsx` da I18nProvider'dan TASHQARIDA render
+ * qilinadi — ya'ni `t()` bu yerda ishlamaydi. Matn ataylab ikkala tilda
+ * qattiq yozilgan: bu ekran birinchi marta kirgan odamga chiqadi, uning
+ * til tanlovi esa hali ma'lum emas.
  */
 export function TelegramGate() {
   return (

@@ -62,24 +62,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       )
       if (!mine.empty) throw new Error('ALREADY_REVIEWED')
 
-      // Yetkazilgan buyurtmalarida shu mahsulot bormi?
-      const delivered = await tx.get(
-        db.collection('orders')
-          .where('userId', '==', userId)
-          .where('status', '==', 'Yetkazildi'),
-      )
+      /*
+         Sotib olganini tekshirish — BITTA hujjat o'qish.
 
-      const purchased = delivered.docs.some((doc) => {
-        const products = doc.data().products
-        if (!Array.isArray(products)) return false
-        return products.some((item) => String(item?.product?.id ?? '') === productId)
-      })
-      if (!purchased) throw new Error('NOT_PURCHASED')
-
-      // Mavjud sharhlar — o'rtachani qayta hisoblash uchun
-      const existing = await tx.get(
-        db.collection('reviews').where('productId', '==', Number(productId)),
-      )
+         Ilgari bu yerda mijozning BARCHA yetkazilgan buyurtmalari
+         o'qilardi. Sodiq mijozda 200 buyurtma bo'lsa, bitta sharh yozish
+         uchun 200 hujjat tashilardi (ustiga tranzaksiya chegaralari ham
+         bor). Endi xarid yozuvi `users/{uid}/purchased/{taomId}` da
+         saqlanadi — uni buyurtma «Yetkazildi» bo'lganda API qo'yadi.
+      */
+      const purchaseRef = db.collection('users').doc(uid).collection('purchased').doc(productId)
+      const purchaseSnap = await tx.get(purchaseRef)
+      if (!purchaseSnap.exists) throw new Error('NOT_PURCHASED')
 
       // ── Yozishlar ──
       const userData = userSnap.data() || {}
@@ -98,16 +92,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         date: new Date().toISOString(),
       })
 
-      // Mahsulotdagi reyting yangilanadi (10-band)
-      const ratings = existing.docs
-        .map((doc) => Number(doc.data().rating))
-        .filter((n) => Number.isFinite(n))
-      ratings.push(rating)
+      /*
+         Reyting yig'indi bilan yangilanadi.
 
-      const count = ratings.length
-      const average = Math.round((ratings.reduce((a, b) => a + b, 0) / count) * 10) / 10
+         Ilgari o'rtachani hisoblash uchun mahsulotning BARCHA sharhlari
+         o'qilardi — ommabop taomda bu yuzlab hujjat. Endi mahsulotda
+         `ratingSum` va `reviews` saqlanadi, yangi baho ularga qo'shiladi.
+      */
+      const product = productSnap.data() || {}
+      const oldCount = Number(product.reviews) || 0
+      // `ratingSum` yo'q bo'lsa (eski mahsulotlar) — mavjud o'rtachadan
+      // tiklaymiz; `scripts/backfill-rating-sum.mjs` uni aniq to'g'rilaydi
+      const oldSum = Number.isFinite(Number(product.ratingSum))
+        ? Number(product.ratingSum)
+        : Math.round((Number(product.rating) || 0) * oldCount)
 
-      tx.update(productRef, { rating: average, reviews: count })
+      const count = oldCount + 1
+      const sum = oldSum + rating
+      const average = Math.round((sum / count) * 10) / 10
+
+      tx.update(productRef, { rating: average, ratingSum: sum, reviews: count })
 
       return { id: reviewRef.id, rating: average, reviews: count }
     })

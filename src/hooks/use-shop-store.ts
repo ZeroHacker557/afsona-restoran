@@ -16,7 +16,18 @@ const ROOT_PAGES: AppPage[] = ['home', 'catalog', 'favorites', 'orders', 'profil
 const LIKES_KEY = 'shopOnlineLikes'
 const CART_KEY = 'shopOnlineCart'
 
-type CartItems = Record<string, { quantity: number; size?: string; color?: string }>
+/*
+   Savat: taom kaliti → miqdor.
+
+   Ilgari kalit `${id}_${o'lcham}_${rang}` shaklida edi — kiyim do'koni
+   shablonidan qolgan. Restoran menyusida o'lcham va rang yo'q, ularni
+   admin panelda kiritish imkoni ham yo'q edi, ya'ni ular hech qachon
+   to'ldirilmasdi. Kalit endi shunchaki taom id'si.
+
+   Eski saqlangan savatlar ham ishlayveradi: id kalitning birinchi
+   qismidan olinadi (`key.split('_')[0]`).
+*/
+type CartItems = Record<string, { quantity: number }>
 
 function loadLikes(): number[] {
   try {
@@ -220,9 +231,9 @@ export function useShopStore() {
       .map(([key, item]) => {
         const pId = Number(key.split('_')[0])
         const p = products.find((pr) => String(pr.id) === String(pId))
-        return p ? { product: p, quantity: item.quantity, size: item.size, color: item.color, cartKey: key } : null
+        return p ? { product: p, quantity: item.quantity, cartKey: key } : null
       })
-      .filter(Boolean) as { product: Product; quantity: number; size?: string; color?: string; cartKey: string }[]
+      .filter(Boolean) as { product: Product; quantity: number; cartKey: string }[]
   }, [cartItems, products])
 
   const searchResults = useMemo(
@@ -324,22 +335,16 @@ export function useShopStore() {
     window.setTimeout(() => setToast(null), 2600)
   }, [])
 
-  const addToCart = useCallback((product: Product, size?: string, color?: string) => {
+  const addToCart = useCallback((product: Product) => {
     if (product.available === false) {
       notify(t('product.soldOutLong'))
       hapticError()
       return
     }
-    const s = size || product.sizes?.[0] || 'nosize'
-    const c = color || product.color || 'nocolor'
-    const key = `${product.id}_${s}_${c}`
+    const key = String(product.id)
     setCartItems((current) => ({
       ...current,
-      [key]: {
-        quantity: (current[key]?.quantity ?? 0) + 1,
-        size: size || product.sizes?.[0],
-        color: color || product.color
-      }
+      [key]: { quantity: (current[key]?.quantity ?? 0) + 1 },
     }))
     notify(t('product.addedToCart', { name: product.name }))
     hapticFeedback('medium')
@@ -406,11 +411,9 @@ export function useShopStore() {
     try {
       await apiPost<{ id: string; orderNumber: string; total: number }>('/api/orders', {
         clientOrderId: orderKeyRef.current,
-        items: cartProducts.map(({ product, quantity, size, color }) => ({
+        items: cartProducts.map(({ product, quantity }) => ({
           productId: product.id,
           quantity,
-          size,
-          color,
         })),
         customer: {
           name: orderForm.name.trim(),

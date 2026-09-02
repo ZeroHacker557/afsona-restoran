@@ -2,14 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
 import { getOpenState, readHours } from './_lib/hours.js'
+import { checkPromo, usedInLegacyArray, USES } from './_lib/promo.js'
 
 const ORDER_NUMBER_START = 1000
 
 type IncomingItem = {
   productId: number | string
   quantity: number
-  size?: string
-  color?: string
 }
 
 type IncomingOrder = {
@@ -50,12 +49,7 @@ function readOrder(body: unknown): IncomingOrder {
       if (!Number.isFinite(quantity) || quantity < 1 || quantity > 99) {
         throw new Error("Mahsulot miqdori noto'g'ri")
       }
-      return {
-        productId: item.productId,
-        quantity,
-        size: item.size ? String(item.size).slice(0, 40) : undefined,
-        color: item.color ? String(item.color).slice(0, 40) : undefined,
-      }
+      return { productId: item.productId, quantity }
     }),
     customer: {
       name: name.slice(0, 120),
@@ -170,8 +164,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let promoRef: FirebaseFirestore.DocumentReference | null = null
       let promoData: FirebaseFirestore.DocumentData | null = null
+      let promoUseRef: FirebaseFirestore.DocumentReference | null = null
+      let promoUsed = false
       // "Faqat birinchi buyurtma uchun" promokodlar shu bayroqqa qaraydi
       let firstOrderChecked = true
+
       if (order.promoCode) {
         const promoQuery = await tx.get(
           db.collection('promocodes').where('code', '==', order.promoCode).limit(1),
@@ -179,6 +176,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (promoQuery.empty) throw new Error('PROMO_NOT_FOUND')
         promoRef = promoQuery.docs[0].ref
         promoData = promoQuery.docs[0].data()
+
+        /*
+           Foydalanish yozuvi — alohida hujjat.
+
+           Ilgari bu `usedBy` massivida saqlanardi: har buyurtmada butun
+           massiv o'qilib qayta yozilardi va u cheksiz o'sib, Firestore'ning
+           1 MB hujjat chegarasiga borib urilardi. Endi har foydalanish
+           o'zining hujjatiga yoziladi — tekshiruv bitta o'qish, o'sish
+           esa cheklanmagan.
+        */
+        promoUseRef = promoRef.collection(USES).doc(String(userId))
+        const useSnap = await tx.get(promoUseRef)
+        promoUsed = useSnap.exists || usedInLegacyArray(promoData, userId, uid)
 
         if (promoData.firstOrderOnly === true) {
           const previous = await tx.get(
@@ -230,8 +240,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             category: String(data.category || ''),
           },
           quantity: item.quantity,
-          size: item.size ?? null,
-          color: item.color ?? null,
         }
       })
 
@@ -246,30 +254,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let appliedPromo: string | null = null
 
       if (promoData && promoRef) {
-        if (promoData.active === false) throw new Error('PROMO_INACTIVE')
+        // Qoidalar `_lib/promo.ts` da — /api/promo bilan bir xil
+        const verdict = checkPromo(promoData, {
+          subtotal,
+          alreadyUsed: promoUsed,
+          isFirstOrder: firstOrderChecked,
+        })
+        if (!verdict.ok) throw new Error(verdict.error)
 
-        const expiresAt = promoData.expiresAt ? Date.parse(String(promoData.expiresAt)) : NaN
-        if (!Number.isNaN(expiresAt) && expiresAt < Date.now()) throw new Error('PROMO_EXPIRED')
-
-        const maxUses = Number(promoData.maxUses)
-        const usageCount = Number(promoData.usageCount) || 0
-        if (Number.isFinite(maxUses) && maxUses > 0 && usageCount >= maxUses) {
-          throw new Error('PROMO_USED_UP')
-        }
-
-        const usedBy: unknown[] = Array.isArray(promoData.usedBy) ? promoData.usedBy : []
-        if (usedBy.includes(userId) || usedBy.includes(uid)) throw new Error('PROMO_ALREADY_USED')
-
-        const minOrderTotal = Number(promoData.minOrderTotal) || 0
-        if (subtotal < minOrderTotal) throw new Error('PROMO_MIN_TOTAL')
-
-        // Faqat birinchi buyurtma uchun mo'ljallangan promokod
-        if (promoData.firstOrderOnly === true && !firstOrderChecked) {
-          throw new Error('PROMO_FIRST_ONLY')
-        }
-
-        discountPercent = Math.min(Math.max(Number(promoData.discountPercent) || 0, 0), 100)
-        appliedPromo = String(promoData.code || order.promoCode)
+        discountPercent = verdict.discountPercent
+        appliedPromo = verdict.code || String(order.promoCode)
       }
 
       const discount = Math.round((subtotal * discountPercent) / 100)
@@ -290,18 +284,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const nextCounter = currentCounter + 1
       tx.set(counterRef, { value: nextCounter }, { merge: true })
 
-      if (promoRef) {
-        const usedBy = Array.isArray(promoData?.usedBy) ? promoData.usedBy : []
-        tx.update(promoRef, {
-          usageCount: (Number(promoData?.usageCount) || 0) + 1,
-          usedBy: [...usedBy, userId],
-        })
+      if (promoRef && promoUseRef) {
+        // Hisoblagich ota hujjatda, foydalanish yozuvi alohida hujjatda
+        tx.update(promoRef, { usageCount: (Number(promoData?.usageCount) || 0) + 1 })
+        tx.set(promoUseRef, { userId, at: new Date().toISOString() })
       }
 
       // Ombor qoldig'ini kamaytiramiz — buyurtma bilan bir transactionda
       stockUpdates.forEach(({ ref, stock }) => tx.update(ref, { stock }))
 
       const userData = userSnap.data() || {}
+
+      /*
+         Mijozda buyurtma borligini uning o'z hujjatiga belgilab qo'yamiz.
+
+         Busiz xabarnomadagi «xarid qilganlar» segmenti BUTUN `orders`
+         kolleksiyasini o'qib chiqishga majbur edi — buyurtmalar esa eng
+         tez o'sadigan to'plam. Bitta bayroq bilan bu so'rov `users`
+         bo'yicha oddiy tenglikka aylanadi.
+      */
+      if (userData.hasOrders !== true) {
+        tx.set(userRef, { hasOrders: true }, { merge: true })
+      }
+
       const orderRef = db.collection('orders').doc()
 
       tx.set(orderRef, {

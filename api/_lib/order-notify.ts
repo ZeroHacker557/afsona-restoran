@@ -91,6 +91,19 @@ export function miniAppButton(): Button[] {
 }
 
 /** Ilova ichidagi bildirishnoma yozadi (xatolik butun amalni to'xtatmaydi). */
+/**
+ * Bitta mijozda saqlanadigan maksimal bildirishnoma soni.
+ *
+ * Ilgari chegara umuman yo'q edi: har status o'zgarishida yozuv
+ * qo'shilar, hech qachon o'chirilmasdi. Bir yil ilovadan foydalangan
+ * mijozda yuzlab yozuv to'planar va ILOVA HAR OCHILGANDA HAMMASI
+ * yuklanardi (so'rov `where('userId','==')` bo'yicha, chegarasiz).
+ */
+const NOTIF_KEEP = 100
+
+/** Har necha yozuvda bir marta tozalash ishga tushadi. */
+const TRIM_CHANCE = 20
+
 export async function pushNotification(
   userId: number,
   title: string,
@@ -99,7 +112,8 @@ export async function pushNotification(
 ) {
   if (!userId) return
   try {
-    await (await adminDb()).collection('notifications').add({
+    const db = await adminDb()
+    await db.collection('notifications').add({
       userId: Number(userId),
       title,
       body,
@@ -107,8 +121,46 @@ export async function pushNotification(
       read: false,
       date: new Date().toISOString(),
     })
+
+    // Tozalashni har safar qilmaymiz — u qo'shimcha so'rov turadi.
+    // Tasodifiy tanlov bilan o'rtacha xarajat kichik bo'ladi, son esa
+    // NOTIF_KEEP atrofida ushlab turiladi.
+    if (Math.random() < 1 / TRIM_CHANCE) await trimNotifications(db, Number(userId))
   } catch (error) {
     console.error('[notify] bildirishnoma yozilmadi:', error)
+  }
+}
+
+/**
+ * Mijozning eng eski bildirishnomalarini o'chiradi.
+ *
+ * So'rovda faqat bitta tenglik sharti bor — shuning uchun qo'shimcha
+ * composite indeks kerak emas. Saralash bu yerda, xotirada bajariladi.
+ */
+async function trimNotifications(db: FirebaseFirestore.Firestore, userId: number) {
+  try {
+    /*
+       Chegara qo'ymaymiz: `orderBy` siz `limit` tasodifiy hujjatlarni
+       qaytaradi va "eng eskisi" noto'g'ri hisoblanardi. Son NOTIF_KEEP
+       atrofida ushlab turilgani uchun bu so'rov ~100 hujjatdan oshmaydi.
+    */
+    const snap = await db.collection('notifications').where('userId', '==', userId).get()
+
+    if (snap.size <= NOTIF_KEEP) return
+
+    const eskidan = snap.docs.sort(
+      (a, b) => (Date.parse(String(a.data().date)) || 0) - (Date.parse(String(b.data().date)) || 0),
+    )
+    const ortiqcha = eskidan.slice(0, snap.size - NOTIF_KEEP)
+
+    const batch = db.batch()
+    ortiqcha.forEach((doc) => batch.delete(doc.ref))
+    await batch.commit()
+
+    console.log(`[notify] ${userId}: ${ortiqcha.length} ta eski bildirishnoma o'chirildi`)
+  } catch (error) {
+    // Tozalash muvaffaqiyatsiz bo'lsa ham bildirishnoma yozilgan
+    console.error('[notify] tozalab bo‘lmadi:', error)
   }
 }
 

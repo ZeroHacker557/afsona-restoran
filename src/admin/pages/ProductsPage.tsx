@@ -14,6 +14,7 @@ import {
   createProduct,
   deleteProduct,
   deleteProducts,
+  orphanImages,
   saveProductOrder,
   shiftPrices,
   updateProduct,
@@ -110,7 +111,8 @@ export function ProductsPage() {
   async function bulkDelete() {
     setBusy(true)
     try {
-      await deleteProducts(selection)
+      // Faqat boshqa taom ishlatmayotgan rasmlar o'chiriladi
+      await deleteProducts(selection, orphanImages(selection, products))
       toast(`${selection.length} ta taom o'chirildi`)
       setSelection([])
       setConfirmBulk(false)
@@ -343,7 +345,7 @@ type FormState = {
 }
 
 function ProductModal({ product, onClose }: { product: AdminProduct | null; onClose: () => void }) {
-  const { categories } = useAdminData()
+  const { categories, products } = useAdminData()
   const fileInput = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState<FormState>({
@@ -431,7 +433,8 @@ function ProductModal({ product, onClose }: { product: AdminProduct | null; onCl
     if (!product) return
     setBusy(true)
     try {
-      await deleteProduct(product.id)
+      // Faqat boshqa taom ishlatmayotgan rasmlar o'chiriladi
+      await deleteProduct(product.id, orphanImages([product.id], products))
       toast("Taom o'chirildi")
       onClose()
     } catch (error) {

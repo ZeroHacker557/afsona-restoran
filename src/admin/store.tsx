@@ -6,6 +6,7 @@ import {
   readPayment,
   watchCategories,
   watchOrders,
+  ORDERS_PAGE,
   watchProducts,
   watchPromos,
   watchSetting,
@@ -81,6 +82,12 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     users: false,
   })
   const [freshOrderIds, setFreshOrderIds] = useState<string[]>([])
+  /*
+   * Jonli ro'yxat chegarasi. Ilgari butun `orders` kolleksiyasi
+   * yuklanardi — bir yildan keyin bu o'n minglab hujjat degani.
+   * «Ko'proq yuklash» bosilganda chegara oshadi va obuna qayta ochiladi.
+   */
+  const [ordersLimit, setOrdersLimit] = useState(ORDERS_PAGE)
 
   // Birinchi yuklashda ovoz chalinmasligi uchun oldingi ro'yxatni eslaymiz
   const knownOrders = useRef<Set<string> | null>(null)
@@ -106,7 +113,22 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
         setUsers(items)
         mark('users')
       }),
-      watchOrders((items) => {
+      watchSetting('delivery', readDelivery, setDelivery),
+      watchSetting('payment', readPayment, setPayment),
+      watchSetting('brand', readBrand, setBrand),
+      watchSetting('hours', readHoursDoc, setHours),
+    ]
+
+    return () => unsubs.forEach((unsubscribe) => unsubscribe())
+  }, [])
+
+  /*
+     Buyurtmalar alohida obunada — chegara o'zgarganda faqat shu qayta
+     ochiladi, qolgan kolleksiyalar qayta o'qilmaydi.
+  */
+  useEffect(() => {
+    return watchOrders(
+      (items) => {
         setOrders(items)
 
         if (knownOrders.current === null) {
@@ -128,16 +150,12 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
           }
           items.forEach((order) => knownOrders.current!.add(order.id))
         }
-        mark('orders')
-      }),
-      watchSetting('delivery', readDelivery, setDelivery),
-      watchSetting('payment', readPayment, setPayment),
-      watchSetting('brand', readBrand, setBrand),
-      watchSetting('hours', readHoursDoc, setHours),
-    ]
-
-    return () => unsubs.forEach((unsubscribe) => unsubscribe())
-  }, [])
+        setLoaded((current) => (current.orders ? current : { ...current, orders: true }))
+      },
+      undefined,
+      ordersLimit,
+    )
+  }, [ordersLimit])
 
   const value = useMemo<AdminData>(
     () => ({
@@ -154,8 +172,15 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
       loading: !loaded.products || !loaded.orders,
       freshOrderIds,
       markOrdersSeen: () => setFreshOrderIds([]),
+      ordersLimit,
+      // Ro'yxat to'lib turgan bo'lsa — demak eskiroqlari ham bor
+      ordersAtLimit: orders.length >= ordersLimit,
+      loadMoreOrders: () => setOrdersLimit((value) => value + ORDERS_PAGE),
     }),
-    [products, categories, orders, promos, users, delivery, payment, brand, hours, loaded, freshOrderIds],
+    [
+      products, categories, orders, promos, users, delivery, payment, brand, hours,
+      loaded, freshOrderIds, ordersLimit,
+    ],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -4,6 +4,7 @@ import {
   Banknote,
   CreditCard,
   GripVertical,
+  History,
   LayoutGrid,
   List,
   MapPin,
@@ -42,7 +43,8 @@ const PERIODS = [
 type Period = (typeof PERIODS)[number]['id']
 
 export function OrdersPage() {
-  const { orders, loaded, freshOrderIds, markOrdersSeen } = useAdminData()
+  const { orders, loaded, freshOrderIds, markOrdersSeen, ordersAtLimit, loadMoreOrders } =
+    useAdminData()
   const [view, setView] = useState<'board' | 'list'>('board')
   const [period, setPeriod] = useState<Period>('today')
   const [status, setStatus] = useState<string>('all')
@@ -374,6 +376,18 @@ export function OrdersPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/*
+         Jonli ro'yxat oxirgi N ta buyurtma bilan cheklangan — busiz panel
+         har ochilganda butun tarixni yuklardi. Eskiroqlari kerak bo'lsa,
+         shu tugma navbatdagi sahifani qo'shadi.
+      */}
+      {ordersAtLimit && (
+        <button className="adm-btn ghost w-full" onClick={loadMoreOrders}>
+          <History size={15} />
+          Eskiroq buyurtmalarni yuklash
+        </button>
       )}
 
       {selected && (

@@ -40,6 +40,12 @@ export type AdminData = {
   /** Sahifa ochilgandan keyin kelgan yangi buyurtmalar (belgilash uchun). */
   freshOrderIds: string[]
   markOrdersSeen: () => void
+  /** Jonli ro'yxatga nechta buyurtma olinyapti. */
+  ordersLimit: number
+  /** Chegaraga yetildimi — «Ko'proq yuklash» tugmasini shu hal qiladi. */
+  ordersAtLimit: boolean
+  /** Chegarani oshiradi (yana bir sahifa). */
+  loadMoreOrders: () => void
 }
 
 export const DataContext = createContext<AdminData | null>(null)

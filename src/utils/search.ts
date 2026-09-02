@@ -24,9 +24,6 @@ function fields(product: Product): string[] {
     product.name,
     product.category,
     product.description ?? '',
-    product.color ?? '',
-    ...(product.colors ?? []),
-    ...(product.sizes ?? []),
   ].filter(Boolean)
 }
 

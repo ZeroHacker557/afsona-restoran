@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
+import { checkPromo, PROMO_MESSAGES, usedInLegacyArray, USES } from './_lib/promo.js'
 
 /**
  * POST /api/promo   { code: string, subtotal: number }
@@ -30,7 +31,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!code) return fail(res, 400, 'Promokod kiritilmagan')
 
   try {
-    const snap = await (await adminDb())
+    const db = await adminDb()
+    const snap = await db
       .collection('promocodes')
       .where('code', '==', code)
       .limit(1)
@@ -38,38 +40,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (snap.empty) return fail(res, 404, 'Bunday promokod topilmadi')
 
+    const promoRef = snap.docs[0].ref
     const promo = snap.docs[0].data()
     const userId = Number(uid)
 
-    if (promo.active === false) return fail(res, 400, 'Promokod faol emas')
+    // Foydalanish yozuvi — alohida hujjat; eski massiv ham tekshiriladi
+    const useSnap = await promoRef.collection(USES).doc(String(userId)).get()
+    const alreadyUsed = useSnap.exists || usedInLegacyArray(promo, userId, uid)
 
-    const expiresAt = promo.expiresAt ? Date.parse(String(promo.expiresAt)) : NaN
-    if (!Number.isNaN(expiresAt) && expiresAt < Date.now()) {
-      return fail(res, 400, 'Promokod muddati tugagan')
+    /*
+       "Faqat birinchi buyurtma" shartini bu yerda ham tekshiramiz, aks
+       holda mijoz oldindan ko'rishda chegirmani ko'rar, buyurtma
+       berayotganda esa rad javob olardi.
+
+       So'rov `api/orders.ts` dagi bilan AYNAN bir xil — ikkalasi bir xil
+       javob berishi shart. (Bekor qilingan buyurtmalarni chiqarib
+       tashlash `status` bo'yicha qo'shimcha shart talab qiladi, u esa
+       Firestore'da composite indeks so'raydi — bu alohida ish.)
+    */
+    let isFirstOrder = true
+    if (promo.firstOrderOnly === true) {
+      const previous = await db.collection('orders').where('userId', '==', userId).limit(1).get()
+      isFirstOrder = previous.empty
     }
 
-    const maxUses = Number(promo.maxUses)
-    const usageCount = Number(promo.usageCount) || 0
-    if (Number.isFinite(maxUses) && maxUses > 0 && usageCount >= maxUses) {
-      return fail(res, 400, 'Promokoddan foydalanish chegarasi tugagan')
+    // Qoidalar `_lib/promo.ts` da — /api/orders bilan bir xil
+    const verdict = checkPromo(promo, { subtotal, alreadyUsed, isFirstOrder })
+    if (!verdict.ok) {
+      return fail(res, 400, PROMO_MESSAGES[verdict.error] || 'Promokod ishlatib bo‘lmaydi')
     }
 
-    const usedBy: unknown[] = Array.isArray(promo.usedBy) ? promo.usedBy : []
-    if (usedBy.includes(userId) || usedBy.includes(uid)) {
-      return fail(res, 400, 'Siz bu promokoddan allaqachon foydalangansiz')
-    }
-
-    const minOrderTotal = Number(promo.minOrderTotal) || 0
-    if (subtotal < minOrderTotal) {
-      return fail(res, 400, `Bu promokod ${minOrderTotal.toLocaleString('uz-UZ')} so'mdan yuqori buyurtmalar uchun`)
-    }
-
-    const discountPercent = Math.min(Math.max(Number(promo.discountPercent) || 0, 0), 100)
-    const discount = Math.round((subtotal * discountPercent) / 100)
+    const discount = Math.round((subtotal * verdict.discountPercent) / 100)
 
     return res.status(200).json({
-      code: String(promo.code || code),
-      discountPercent,
+      code: verdict.code || code,
+      discountPercent: verdict.discountPercent,
       discount,
       total: Math.max(subtotal - discount, 0),
     })

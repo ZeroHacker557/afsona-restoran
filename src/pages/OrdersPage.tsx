@@ -42,6 +42,20 @@ type Props = {
 /** Mijoz faqat shu statuslardagi buyurtmani bekor qila oladi. */
 const CANCELLABLE: OrderStatus[] = ['Yangi', 'Qabul qilindi']
 
+/**
+ * Mijoz buyurtmani o'zi bekor qila oladimi.
+ *
+ * Faqat naqd to'lovda. Kartada pul allaqachon o'tkazilgan bo'lishi
+ * mumkin — uni qaytarish odam qarorini talab qiladi, shuning uchun
+ * bunday buyurtma operator orqali bekor qilinadi. Server ham xuddi shu
+ * qoidani tekshiradi (`api/order-cancel.ts`), bu yerda esa tugmani
+ * ko'rsatmaymiz — mijoz bosib, xato olishini kutmasin.
+ */
+function canCancel(order: Order): boolean {
+  if (!CANCELLABLE.includes(order.status)) return false
+  return (order.paymentMethod || 'Naqd') === 'Naqd'
+}
+
 export function OrdersPage({
   orders, ordersLoaded, authReady, isAuthenticated, cartCount, onSearch, onOpenCart, onGoToCatalog, onNotify,
 }: Props) {
@@ -245,7 +259,7 @@ export function OrdersPage({
                 </div>
               )}
 
-              {CANCELLABLE.includes(order.status) && (
+              {canCancel(order) && (
                 <button
                   onClick={() => handleCancel(order.id)}
                   disabled={cancellingId === order.id}

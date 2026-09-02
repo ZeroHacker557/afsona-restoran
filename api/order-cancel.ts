@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
+import { adjustStock } from './_lib/stock.js'
+import { syncCourierMessages } from './_lib/courier.js'
+import { notifyCustomerStatus, type OrderDoc } from './_lib/order-notify.js'
 
 /** Faqat shu statuslardagi buyurtmani mijoz bekor qila oladi. */
 const CANCELLABLE = ['Yangi', 'Qabul qilindi']
@@ -15,7 +18,13 @@ const CANCELLABLE = ['Yangi', 'Qabul qilindi']
  * buyurtmalar sahifasida shu nomli bo'lim bor edi-yu, u abadiy bo'sh
  * turardi.
  *
- * Bekor qilinganda ombor qoldig'i qaytariladi.
+ * Bekor qilinganda ombor qoldig'i qaytariladi, kuryerlardagi xabar
+ * yangilanadi va mijozga tasdiq boradi.
+ *
+ * MUHIM: mijoz faqat NAQD to'lovdagi buyurtmani o'zi bekor qila oladi.
+ * Karta bilan to'langan buyurtmada pul allaqachon o'tkazilgan bo'ladi —
+ * uni qaytarish odam qarori, shuning uchun bunday buyurtma faqat
+ * operator orqali bekor qilinadi.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!requirePost(req, res)) return
@@ -52,38 +61,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (status === 'Bekor qilingan') throw new Error('ALREADY_CANCELLED')
       if (!CANCELLABLE.includes(status)) throw new Error('TOO_LATE')
 
-      // Ombor qoldig'ini qaytaramiz
-      const items = Array.isArray(order.products) ? order.products : []
-      const restore = new Map<string, number>()
-      items.forEach((item) => {
-        const id = String(item?.product?.id ?? '')
-        if (!id) return
-        restore.set(id, (restore.get(id) || 0) + (Number(item.quantity) || 0))
-      })
+      // Karta bilan to'langan buyurtmani mijoz o'zi bekor qila olmaydi:
+      // pul qaytarish operator ishtirokini talab qiladi.
+      if (String(order.paymentMethod || '') !== 'Naqd') throw new Error('CARD_ORDER')
 
-      const productRefs = [...restore.keys()].map((id) => db.collection('products').doc(id))
-      const productSnaps = productRefs.length ? await tx.getAll(...productRefs) : []
-
-      productSnaps.forEach((snap) => {
-        if (!snap.exists) return
-        const data = snap.data() as FirebaseFirestore.DocumentData
-        if (typeof data.stock !== 'number') return
-        const back = restore.get(snap.id) || 0
-        tx.update(snap.ref, { stock: data.stock + back })
-      })
+      // Ombor qoldig'ini qaytaramiz (yozishlardan oldin o'qiladi)
+      if (order.stockRestored !== true) {
+        await adjustStock(tx, db, order as OrderDoc, 1)
+      }
 
       tx.update(orderRef, {
         status: 'Bekor qilingan',
         cancelledAt: new Date().toISOString(),
         cancelledBy: 'customer',
-        // Bot mijozga xabar berishi uchun bayroq
-        cancelNotified: false,
+        stockRestored: true,
       })
 
-      return { id: orderId, orderNumber: String(order.orderNumber || order.id || '') }
+      return {
+        id: orderId,
+        orderNumber: String(order.orderNumber || order.id || ''),
+        order: { ...order, id: orderId, status: 'Bekor qilingan' } as OrderDoc,
+      }
     })
 
-    return res.status(200).json(result)
+    /*
+       Xabarlar tranzaksiyadan KEYIN ketadi — tashqi so'rov tranzaksiya
+       ichida bo'lmasligi kerak (u qayta urinilishi mumkin).
+
+       Ilgari bu yerda hech qanday xabar yo'q edi: kuryer guruhida
+       «Oldim» tugmasi turaverardi va mijozga tasdiq kelmasdi.
+    */
+    try {
+      await notifyCustomerStatus(result.order, 'Bekor qilingan')
+      await syncCourierMessages(result.order)
+    } catch (error) {
+      // Buyurtma bekor qilindi — xabar ketmasa ham javob muvaffaqiyatli
+      console.error('[order-cancel] xabar yuborilmadi:', error)
+    }
+
+    return res.status(200).json({ id: result.id, orderNumber: result.orderNumber })
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
     const messages: Record<string, string> = {
@@ -91,6 +107,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       NOT_YOURS: 'Bu buyurtma sizniki emas',
       ALREADY_CANCELLED: 'Buyurtma allaqachon bekor qilingan',
       TOO_LATE: "Bu buyurtmani endi bekor qilib bo'lmaydi — operator bilan bog'laning",
+      CARD_ORDER:
+        "Karta bilan to'langan buyurtmani ilovadan bekor qilib bo'lmaydi — " +
+        "iltimos, biz bilan bog'laning",
     }
     if (messages[code]) return fail(res, 400, messages[code])
 

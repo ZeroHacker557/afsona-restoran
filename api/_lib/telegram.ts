@@ -22,28 +22,101 @@ function token(): string {
   return value
 }
 
-async function call(method: string, payload: Record<string, unknown>): Promise<SendResult> {
-  let response: Response
-  try {
-    response = await fetch(`${API_BASE}${token()}/${method}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'tarmoq xatosi' }
-  }
+/*
+   ── Navbat va qayta urinish ────────────────────────────────
+
+   Telegram chegara qo'yadi: guruhga taxminan 20 xabar/daqiqa, umumiy
+   holda ~30 xabar/sekund. Chegaradan oshilsa `429` va `retry_after`
+   qaytadi — ya'ni "shuncha sekund kutib, qayta urin".
+
+   Ilgari na navbat, na qayta urinish bor edi: chaqiruvlar ketma-ket,
+   to'xtovsiz ketardi va chegaraga urilgan xabar jimgina yo'qolardi
+   (xato faqat Vercel jurnaliga tushardi). Ko'p buyurtmali kunda yoki
+   xabarnoma paytida bu sezilarli bo'ladi.
+
+   Endi barcha chaqiruvlar bitta navbatdan o'tadi: orasida kichik
+   tanaffus bilan, `429` da esa Telegram aytgan vaqtni kutib qayta
+   urinish bilan.
+
+   Chegara: navbat BITTA funksiya nusxasi ichida ishlaydi. Vercel bir
+   vaqtda bir nechta nusxa ishga tushirsa, ular bir-birini ko'rmaydi.
+   Shunga qaramay foyda katta — portlash aynan bitta chaqiruv ichida
+   bo'ladi (xabarnoma paketi, kuryerlarga tarqatish). To'liq global
+   cheklov uchun tashqi navbat kerak bo'lardi.
+*/
+
+/** Ketma-ket so'rovlar orasidagi eng kichik tanaffus (millisekund). */
+const GAP_MS = 40
+
+/** `429` da nechta marta qayta urinamiz. */
+const RETRIES = 2
+
+let queue: Promise<unknown> = Promise.resolve()
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** Chaqiruvlarni navbatga qo'yadi — ular bir vaqtda ketmaydi. */
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+  const result = queue.then(task, task)
+  // Navbat xato tufayli uzilib qolmasin
+  queue = result.then(
+    () => sleep(GAP_MS),
+    () => sleep(GAP_MS),
+  )
+  return result
+}
+
+async function once(method: string, payload: Record<string, unknown>) {
+  const response = await fetch(`${API_BASE}${token()}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
 
   const data = (await response.json().catch(() => null)) as
-    | { ok: boolean; description?: string; error_code?: number; result?: { message_id?: number } }
+    | {
+        ok: boolean
+        description?: string
+        error_code?: number
+        result?: { message_id?: number }
+        parameters?: { retry_after?: number }
+      }
     | null
 
-  if (data?.ok) return { ok: true, messageId: data.result?.message_id }
+  return { status: response.status, data }
+}
 
-  const description = data?.description || `HTTP ${response.status}`
-  // 403 — foydalanuvchi botni bloklagan yoki hech qachon ochmagan.
-  const blocked = data?.error_code === 403 || /blocked|deactivated|chat not found/i.test(description)
-  return { ok: false, error: description, blocked }
+async function call(method: string, payload: Record<string, unknown>): Promise<SendResult> {
+  return enqueue(async () => {
+    for (let attempt = 0; attempt <= RETRIES; attempt++) {
+      let result
+      try {
+        result = await once(method, payload)
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : 'tarmoq xatosi' }
+      }
+
+      const { status, data } = result
+      if (data?.ok) return { ok: true, messageId: data.result?.message_id }
+
+      const description = data?.description || `HTTP ${status}`
+
+      // 429 — chegaraga urildik. Telegram qancha kutishni o'zi aytadi.
+      if (data?.error_code === 429 && attempt < RETRIES) {
+        const wait = Math.min(Number(data.parameters?.retry_after) || 1, 30)
+        console.warn(`[telegram] ${method}: chegara, ${wait}s kutamiz`)
+        await sleep(wait * 1000 + 250)
+        continue
+      }
+
+      // 403 — foydalanuvchi botni bloklagan yoki hech qachon ochmagan.
+      const blocked =
+        data?.error_code === 403 || /blocked|deactivated|chat not found/i.test(description)
+      return { ok: false, error: description, blocked }
+    }
+
+    return { ok: false, error: 'Telegram chegarasi — qayta urinishlar tugadi' }
+  })
 }
 
 export type Button = {

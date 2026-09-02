@@ -4,14 +4,18 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   setDoc,
   updateDoc,
   where,
   writeBatch,
+  type QueryConstraint,
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import { removeUploaded } from './upload'
 import { DEFAULT_HOURS, readHours, type WorkingHours } from '../../utils/hours'
 
 /**
@@ -92,8 +96,6 @@ export type AdminOrder = {
   products: {
     product: { id: number | string; name: string; price: number; images?: string[] }
     quantity: number
-    size?: string | null
-    color?: string | null
   }[]
   customer: {
     name?: string
@@ -125,9 +127,14 @@ function watch<T>(
   map: (id: string, data: Record<string, unknown>) => T,
   onData: (items: T[]) => void,
   onError?: (error: unknown) => void,
+  constraints: QueryConstraint[] = [],
 ): Unsub {
+  const source = constraints.length
+    ? query(collection(db, path), ...constraints)
+    : collection(db, path)
+
   return onSnapshot(
-    collection(db, path),
+    source,
     (snap) => onData(snap.docs.map((d) => map(d.id, d.data() as Record<string, unknown>))),
     (error) => {
       console.error(`[admin-db] ${path}:`, error)
@@ -203,8 +210,6 @@ export async function createProduct(input: Omit<AdminProduct, 'id'>): Promise<st
     available: input.available !== false,
     rating: 5,
     reviews: 0,
-    sizes: [],
-    color: '',
   })
   return id
 }
@@ -213,15 +218,54 @@ export function updateProduct(id: string, updates: Partial<AdminProduct>) {
   return updateDoc(doc(db, 'products', id), updates as Record<string, unknown>)
 }
 
-export function deleteProduct(id: string) {
-  return deleteDoc(doc(db, 'products', id))
+/**
+ * O'chirilayotgan taomlarning qaysi rasmlarini Storage'dan ham olib
+ * tashlash mumkinligini hisoblaydi.
+ *
+ * Boshqa taom hali ham ishlatayotgan havolaga tegilmaydi — aks holda
+ * bitta taomni o'chirish ikkinchisining rasmini yo'q qilib qo'yardi.
+ */
+export function orphanImages(removingIds: string[], all: AdminProduct[]): string[] {
+  const removing = new Set(removingIds)
+
+  const qoladi = new Set<string>()
+  for (const product of all) {
+    if (removing.has(product.id)) continue
+    for (const url of product.images) qoladi.add(url)
+  }
+
+  const yetim = new Set<string>()
+  for (const product of all) {
+    if (!removing.has(product.id)) continue
+    for (const url of product.images) {
+      if (!qoladi.has(url)) yetim.add(url)
+    }
+  }
+
+  return [...yetim]
+}
+
+/**
+ * Taomni o'chiradi. `images` berilsa — Storage'dagi rasmlari ham
+ * o'chiriladi.
+ *
+ * Nega muhim: ilgari faqat Firestore hujjati o'chirilardi va rasmlar
+ * Storage'da abadiy qolib ketardi. Menyu bir necha marta yangilansa,
+ * yuzlab yetim fayl to'planadi va ular uchun har oy pul to'lanadi.
+ */
+export async function deleteProduct(id: string, images: string[] = []) {
+  await deleteDoc(doc(db, 'products', id))
+  // Hujjat o'chgach rasmlar — bu tartib muhim: rasm o'chib, hujjat
+  // qolib ketsa, taom buzuq havola bilan ko'rinardi.
+  await Promise.all(images.map((url) => removeUploaded(url)))
 }
 
 /** Bir nechta taomni birdaniga o'chirish. */
-export async function deleteProducts(ids: string[]) {
+export async function deleteProducts(ids: string[], images: string[] = []) {
   const batch = writeBatch(db)
   ids.forEach((id) => batch.delete(doc(db, 'products', id)))
   await batch.commit()
+  await Promise.all(images.map((url) => removeUploaded(url)))
 }
 
 /** Tanlangan taomlar narxini foizda o'zgartirish (+10 / −15). */
@@ -283,10 +327,6 @@ export function deleteCategory(id: string) {
   return deleteDoc(doc(db, 'categories', id))
 }
 
-export async function countProductsInCategory(name: string): Promise<number> {
-  const snap = await getDocs(query(collection(db, 'products'), where('category', '==', name)))
-  return snap.size
-}
 
 /**
  * Taomlar tartibini saqlash — ilovada shu tartibda ko'rinadi.
@@ -314,37 +354,82 @@ export async function saveCategoryOrder(ids: string[]) {
 
 // ── Buyurtmalar ──────────────────────────────────────────────
 
-export function watchOrders(onData: (items: AdminOrder[]) => void, onError?: (e: unknown) => void) {
+/**
+ * Jonli ro'yxatga nechta buyurtma olinadi.
+ *
+ * Ilgari chegara umuman yo'q edi: panel har ochilganda BUTUN `orders`
+ * kolleksiyasi yuklanardi. Kuniga 30 buyurtmada bu yilida ~11 000 hujjat
+ * — har ochilishda o'n megabaytlab trafik va o'n minglab Firestore
+ * o'qishi (bepul chegara kuniga 50 000).
+ *
+ * 400 ta — bir necha kunlik ish uchun mo'l. Uzoqroq davr kerak bo'lsa
+ * `loadOrdersSince()` bir martalik so'rov qiladi (statistika shundan
+ * foydalanadi), panelda esa «Ko'proq yuklash» chegarani oshiradi.
+ */
+export const ORDERS_PAGE = 400
+
+/** Firestore hujjatidan AdminOrder yasaydi — bitta joyda. */
+function mapOrder(id: string, data: Record<string, unknown>): AdminOrder {
+  return {
+    id,
+    orderNumber: str(data.orderNumber, `#${id.slice(0, 6)}`),
+    createdAt: str(data.createdAt),
+    status: str(data.status, 'Yangi'),
+    paymentMethod: str(data.paymentMethod, 'Naqd'),
+    paymentStatus: data.paymentStatus == null ? null : str(data.paymentStatus),
+    receiptUrl: data.receiptUrl == null ? null : str(data.receiptUrl),
+    total: num(data.total),
+    subtotal: num(data.subtotal),
+    discount: num(data.discount),
+    discountPercent: num(data.discountPercent),
+    promoCode: data.promoCode == null ? null : str(data.promoCode),
+    deliveryFee: num(data.deliveryFee),
+    userId: num(data.userId),
+    username: data.username == null ? null : str(data.username),
+    courierId: data.courierId == null ? null : num(data.courierId),
+    courierName: data.courierName == null ? null : str(data.courierName),
+    claimedAt: data.claimedAt == null ? null : str(data.claimedAt),
+    deliveredAt: data.deliveredAt == null ? null : str(data.deliveredAt),
+    cancelReason: data.cancelReason == null ? null : str(data.cancelReason),
+    products: Array.isArray(data.products) ? (data.products as AdminOrder['products']) : [],
+    customer: (data.customer || {}) as AdminOrder['customer'],
+  }
+}
+
+const byNewest = (a: AdminOrder, b: AdminOrder) =>
+  (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)
+
+export function watchOrders(
+  onData: (items: AdminOrder[]) => void,
+  onError?: (e: unknown) => void,
+  take: number = ORDERS_PAGE,
+) {
   return watch<AdminOrder>(
     'orders',
-    (id, data) => ({
-      id,
-      orderNumber: str(data.orderNumber, `#${id.slice(0, 6)}`),
-      createdAt: str(data.createdAt),
-      status: str(data.status, 'Yangi'),
-      paymentMethod: str(data.paymentMethod, 'Naqd'),
-      paymentStatus: data.paymentStatus == null ? null : str(data.paymentStatus),
-      receiptUrl: data.receiptUrl == null ? null : str(data.receiptUrl),
-      total: num(data.total),
-      subtotal: num(data.subtotal),
-      discount: num(data.discount),
-      discountPercent: num(data.discountPercent),
-      promoCode: data.promoCode == null ? null : str(data.promoCode),
-      deliveryFee: num(data.deliveryFee),
-      userId: num(data.userId),
-      username: data.username == null ? null : str(data.username),
-      courierId: data.courierId == null ? null : num(data.courierId),
-      courierName: data.courierName == null ? null : str(data.courierName),
-      claimedAt: data.claimedAt == null ? null : str(data.claimedAt),
-      deliveredAt: data.deliveredAt == null ? null : str(data.deliveredAt),
-      cancelReason: data.cancelReason == null ? null : str(data.cancelReason),
-      products: Array.isArray(data.products) ? (data.products as AdminOrder['products']) : [],
-      customer: (data.customer || {}) as AdminOrder['customer'],
-    }),
-    (items) =>
-      onData(items.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))),
+    mapOrder,
+    (items) => onData(items.sort(byNewest)),
     onError,
+    // `createdAt` — ISO matn, u alifbo bo'yicha ham to'g'ri saralanadi
+    [orderBy('createdAt', 'desc'), limit(take)],
   )
+}
+
+/**
+ * Berilgan sanadan keyingi barcha buyurtmalar — bir martalik o'qish.
+ *
+ * Statistika va bosh sahifadagi grafik uzoq davrni ko'rsatadi, lekin
+ * jonli yangilanish ularga kerak emas. Shu tufayli ular chegaralangan
+ * jonli ro'yxatga bog'liq bo'lmaydi va raqamlar to'g'ri chiqadi.
+ */
+export async function loadOrdersSince(sinceISO: string): Promise<AdminOrder[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, 'orders'),
+      where('createdAt', '>=', sinceISO),
+      orderBy('createdAt', 'desc'),
+    ),
+  )
+  return snap.docs.map((d) => mapOrder(d.id, d.data() as Record<string, unknown>)).sort(byNewest)
 }
 
 // ── Promokodlar ──────────────────────────────────────────────

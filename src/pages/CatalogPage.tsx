@@ -24,11 +24,6 @@ type Props = ProductActions & {
 }
 
 /** Mahsulotdagi ranglar bitta qatorda saqlanadi: "Qora, Oq, Qizil". */
-function productColors(product: Product): string[] {
-  if (product.colors?.length) return product.colors
-  if (!product.color) return []
-  return product.color.split(',').map((c) => c.trim()).filter(Boolean)
-}
 
 export function CatalogPage({
   products, categories, loading, cartCount, initialCategory, onSearch, onOpenCart, ...actions
@@ -55,8 +50,6 @@ export function CatalogPage({
   // Filtrlar (2-band)
   const [priceFrom, setPriceFrom] = useState('')
   const [priceTo, setPriceTo] = useState('')
-  const [size, setSize] = useState<string | null>(null)
-  const [color, setColor] = useState<string | null>(null)
   const [inStockOnly, setInStockOnly] = useState(false)
 
   const displayCategories = useMemo(
@@ -64,25 +57,13 @@ export function CatalogPage({
     [categories, ALL],
   )
 
-  // Mavjud o'lcham va ranglar — faqat haqiqatan bor variantlar ko'rsatiladi
-  const { allSizes, allColors, maxPrice } = useMemo(() => {
-    const sizes = new Set<string>()
-    const colors = new Set<string>()
-    let max = 0
-    products.forEach((p) => {
-      p.sizes?.forEach((s) => sizes.add(s))
-      productColors(p).forEach((c) => colors.add(c))
-      if (p.price > max) max = p.price
-    })
-    return {
-      allSizes: [...sizes].sort(),
-      allColors: [...colors].sort(),
-      maxPrice: max,
-    }
-  }, [products])
+  // Narx maydonining o'rnini to'ldirish uchun eng qimmat taom
+  const maxPrice = useMemo(
+    () => products.reduce((max, p) => (p.price > max ? p.price : max), 0),
+    [products],
+  )
 
-  const activeFilterCount =
-    (priceFrom ? 1 : 0) + (priceTo ? 1 : 0) + (size ? 1 : 0) + (color ? 1 : 0) + (inStockOnly ? 1 : 0)
+  const activeFilterCount = (priceFrom ? 1 : 0) + (priceTo ? 1 : 0) + (inStockOnly ? 1 : 0)
 
   const shown = useMemo(() => {
     const from = Number(priceFrom) || 0
@@ -91,8 +72,6 @@ export function CatalogPage({
     const filtered = products.filter((p) => {
       if (active !== ALL && p.category !== active) return false
       if (p.price < from || p.price > to) return false
-      if (size && !p.sizes?.includes(size)) return false
-      if (color && !productColors(p).includes(color)) return false
       if (inStockOnly && p.stock === 0) return false
       return true
     })
@@ -102,10 +81,10 @@ export function CatalogPage({
     return [...filtered].sort((a, b) =>
       sortMode === 'cheap' ? a.price - b.price : b.price - a.price,
     )
-  }, [products, active, ALL, priceFrom, priceTo, size, color, inStockOnly, sortMode])
+  }, [products, active, ALL, priceFrom, priceTo, inStockOnly, sortMode])
 
   // Filtr o'zgarsa boshidan ko'rsatamiz
-  const pageKey = `${active}|${priceFrom}|${priceTo}|${size}|${color}|${inStockOnly}|${sortMode}`
+  const pageKey = `${active}|${priceFrom}|${priceTo}|${inStockOnly}|${sortMode}`
   const [lastKey, setLastKey] = useState(pageKey)
   if (pageKey !== lastKey) {
     setLastKey(pageKey)
@@ -118,8 +97,6 @@ export function CatalogPage({
   const resetFilters = () => {
     setPriceFrom('')
     setPriceTo('')
-    setSize(null)
-    setColor(null)
     setInStockOnly(false)
   }
 
@@ -245,52 +222,6 @@ export function CatalogPage({
               </div>
             </div>
           </div>
-
-          {/* O'lcham */}
-          {allSizes.length > 0 && (
-            <div className="mb-4">
-              <label className="field-label">{t('catalog.size')}</label>
-              <div className="flex flex-wrap gap-2">
-                {allSizes.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSize(size === s ? null : s)}
-                    className="rounded-xl border px-3 py-2 text-sm font-bold transition"
-                    style={{
-                      borderColor: size === s ? 'var(--brand)' : 'var(--line)',
-                      background: size === s ? 'var(--brand-soft)' : 'var(--surface)',
-                      color: size === s ? 'var(--brand)' : 'var(--ink)',
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Rang */}
-          {allColors.length > 0 && (
-            <div className="mb-4">
-              <label className="field-label">{t('catalog.color')}</label>
-              <div className="flex flex-wrap gap-2">
-                {allColors.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setColor(color === c ? null : c)}
-                    className="rounded-xl border px-3 py-2 text-sm font-bold transition"
-                    style={{
-                      borderColor: color === c ? 'var(--brand)' : 'var(--line)',
-                      background: color === c ? 'var(--brand-soft)' : 'var(--surface)',
-                      color: color === c ? 'var(--brand)' : 'var(--ink)',
-                    }}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Faqat sotuvdagilar */}
           <button

@@ -3,7 +3,7 @@ import {
   ArrowRight, Bell, CircleHelp, Heart, Leaf, Search,
   ShieldCheck, Truck, UtensilsCrossed,
 } from 'lucide-react'
-import heroImg from '../images/hero-food.png'
+import heroImg from '../images/hero-food.webp'
 import { ProductCard } from '../components/product/ProductCard'
 import { ProductRowSkeleton } from '../components/ui/ProductCardSkeleton'
 import { CartButton } from '../components/ui/CartButton'

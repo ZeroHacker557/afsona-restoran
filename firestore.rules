@@ -57,6 +57,14 @@ service cloud.firestore {
                     && request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['first_name', 'last_name', 'phone', 'addresses', 'language']);
       allow delete: if false;
+
+      // Mijoz qaysi taomlarni sotib olgani — sharh qoldirish huquqi shu
+      // bo'yicha tekshiriladi. Yozuvni faqat server qo'yadi (buyurtma
+      // «Yetkazildi» bo'lganda), mijoz esa o'zinikini ko'ra oladi.
+      match /purchased/{productId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
     }
 
     // ── Buyurtmalar: o'qish mumkin, yozish YO'Q ─────────────
@@ -94,14 +102,48 @@ service cloud.firestore {
     // Tekshirish /api/promo va /api/orders orqali.
     match /promocodes/{promoId} {
       allow read, write: if isAdmin();
+
+      // Kim qachon foydalangani — har foydalanish alohida hujjat.
+      // Ilgari bu ota hujjatdagi `usedBy` massivida edi va cheksiz
+      // o'sardi. Yozishni faqat server (Admin SDK) bajaradi, panelga
+      // esa o'qish kerak bo'lishi mumkin.
+      match /uses/{userId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
     }
 
-    // ── Sozlamalar: o'qish mumkin (karta raqami), yozish yo'q ──
-    // Ish vaqti va brend ma'lumotini mijoz kirmasdan ham o'qishi kerak
-    // (ilova ochilishi bilan "yopiq" holatini ko'rsatadi).
+    // ── Sozlamalar ──────────────────────────────────────────
+    //
+    // Ruxsat HUJJAT BO'YICHA ajratilgan. Ilgari shart `signedIn()` edi —
+    // ya'ni ilovaga kirgan istalgan mijoz `admins` (panel email'lari) va
+    // `couriers` (xodimlarning telefon raqamlari, guruh id'si) hujjatlarini
+    // o'qiy olardi.
+    //
+    //   hours, brand        — ilova ochilishi bilan, kirmasdan ham kerak
+    //                         ("yopiq" holati, restoran nomi va aloqasi)
+    //   payment, delivery   — buyurtma berish uchun kerak (karta raqami,
+    //                         yetkazish narxi), faqat kirgan mijozga
+    //   admins, couriers,   — faqat panel
+    //   channel
     match /settings/{docId} {
-      allow read: if docId == 'hours' || docId == 'brand' || signedIn();
+      allow read: if docId in ['hours', 'brand']
+                  || (signedIn() && docId in ['payment', 'delivery'])
+                  || isAdmin();
       allow write: if isAdmin();
+    }
+
+    // ── Kanal postlari tarixi: faqat panel ──────────────────
+    //
+    // Postni /api/admin yaratadi (Admin SDK qoidalarni chetlab o'tadi).
+    // Panelga esa o'qish kerak: «Tarix» ro'yxati va undagi «Aksiya
+    // tugadi» / «O'chirish» tugmalari shu ma'lumotdan ishlaydi.
+    //
+    // Bu qoida ilgari umuman yozilmagan edi — kolleksiya oxirgi
+    // `allow read, write: if false` ga tushib qolar, natijada Kanal
+    // sahifasidagi tarix hech qachon yuklanmasdi (jimgina bo'sh turardi).
+    match /channelPosts/{postId} {
+      allow read, write: if isAdmin();
     }
 
     // ── Hisoblagichlar: faqat server ────────────────────────

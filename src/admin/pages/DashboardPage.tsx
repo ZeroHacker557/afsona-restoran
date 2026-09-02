@@ -10,6 +10,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useAdminData } from '../lib/data-context'
+import { useOrdersRange } from '../lib/use-orders-range'
 import { StatCard, Empty, Chip, Skeleton, RowsSkeleton } from '../components/ui'
 import { BarChart, type ChartPoint } from '../components/BarChart'
 import { dayKey, dayLabel, money, shortMoney, timeAgo } from '../lib/format'
@@ -17,8 +18,16 @@ import { DEAD_STATUSES as DEAD, STATUS_STYLE } from '../lib/status'
 import { useNow } from '../lib/now'
 
 export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | 'products') => void }) {
-  const { orders, products, users, hours, loaded } = useAdminData()
+  const { orders: liveOrders, products, users, hours, loaded } = useAdminData()
   const now = useNow()
+
+  /*
+     Jonli ro'yxat oxirgi N ta buyurtma bilan cheklangan, bu yerdagi
+     hisoblar esa 30 kunlik davrni qamraydi. `useOrdersRange` ikkalasini
+     birlashtiradi: tarix bir marta o'qiladi, yangi buyurtma esa jonli
+     ro'yxatdan darhol qo'shiladi.
+  */
+  const { orders, ready: rangeReady } = useOrdersRange(30)
 
   const stats = useMemo(() => {
     const today = dayKey(new Date(now).toISOString())
@@ -71,11 +80,13 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
       weekRevenue,
       weekCount: weekOrders.length,
       average,
-      pending: orders.filter((order) => order.status === 'Yangi').length,
+      // Kutayotgan buyurtmalar — har doim jonli ro'yxatdan
+      pending: liveOrders.filter((order) => order.status === 'Yangi').length,
+      total30: live.length,
       chart,
       top,
     }
-  }, [orders, now])
+  }, [orders, liveOrders, now])
 
   const stopped = products.filter((product) => product.available === false)
   const outOfStock = products.filter((product) => typeof product.stock === 'number' && product.stock! <= 0)
@@ -89,28 +100,28 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
           value={money(stats.todayRevenue)}
           sub={`${stats.todayCount} ta buyurtma`}
           icon={<TrendingUp size={16} />}
-          loading={!loaded.orders}
+          loading={!rangeReady}
         />
         <StatCard
           label="7 kunlik tushum"
           value={money(stats.weekRevenue)}
           sub={`${stats.weekCount} ta buyurtma`}
           icon={<Receipt size={16} />}
-          loading={!loaded.orders}
+          loading={!rangeReady}
         />
         <StatCard
           label="O'rtacha chek"
           value={money(stats.average)}
-          sub={`Jami ${orders.length} ta buyurtma`}
+          sub={`30 kunda ${stats.total30} ta buyurtma`}
           icon={<ShoppingBag size={16} />}
-          loading={!loaded.orders}
+          loading={!rangeReady}
         />
         <StatCard
           label="Mijozlar"
           value={String(users.length)}
           sub={`${stats.pending} ta buyurtma kutmoqda`}
           icon={<Users size={16} />}
-          loading={!loaded.users || !loaded.orders}
+          loading={!loaded.users || !rangeReady}
         />
       </div>
 
@@ -149,7 +160,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
         <div className="adm-card">
           <div className="adm-card-head">
             <span>Tushum — oxirgi 14 kun</span>
-            {loaded.orders ? (
+            {rangeReady ? (
               <span className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
                 {shortMoney(stats.chart.reduce((sum, point) => sum + point.value, 0))}
               </span>
@@ -158,7 +169,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
             )}
           </div>
           <div className="p-4">
-            {loaded.orders ? (
+            {rangeReady ? (
               <BarChart data={stats.chart} />
             ) : (
               <Skeleton className="h-[150px] w-full" />
@@ -170,7 +181,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (route: 'orders' | '
           <div className="adm-card-head">
             <span>Eng ko'p sotilgan (30 kun)</span>
           </div>
-          {!loaded.orders ? (
+          {!rangeReady ? (
             <div className="flex flex-col gap-3 p-3">
               {Array.from({ length: 5 }, (_, index) => (
                 <div key={index} className="flex items-center gap-3">

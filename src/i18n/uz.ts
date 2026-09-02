@@ -10,13 +10,10 @@ export const uz = {
   'common.save': 'Saqlash',
   'common.saving': 'Saqlanmoqda...',
   'common.back': 'Orqaga',
-  'common.loading': 'Yuklanmoqda...',
-  'common.retry': 'Qayta urinish',
   'common.close': 'Yopish',
   'common.pcs': 'ta',
   'common.soon': 'tez orada!',
   'common.optional': 'ixtiyoriy',
-  'common.required': 'majburiy',
   'common.saveFailed': "Saqlab bo'lmadi. Internetni tekshirib, qayta urining",
   'common.notSignedIn': "Tizimga kirilmagan. Ilovani Telegram orqali qayta oching",
 
@@ -56,26 +53,18 @@ export const uz = {
   'catalog.total': 'Jami {count} ta taom',
   'catalog.emptyCategory': 'Bu kategoriyada taom topilmadi',
   'catalog.emptyCategoryText': 'Boshqa kategoriyani tanlang.',
-  'catalog.filterSummary': 'Kategoriya: {category} • Narx: {sort}',
-  'catalog.sortAsc': 'arzondan qimmatga',
-  'catalog.sortDesc': 'qimmatdan arzonga',
   'catalog.priceRange': 'Narx oralig‘i',
   'catalog.priceFrom': 'dan',
   'catalog.priceTo': 'gacha',
-  'catalog.size': 'Porsiya',
-  'catalog.color': 'Turi',
   'catalog.inStockOnly': 'Faqat mavjud taomlar',
   'catalog.reset': 'Tozalash',
   'catalog.apply': "Qo'llash",
-  'catalog.activeFilters': '{count} ta filtr',
   'catalog.loadMore': 'Ko‘proq ko‘rsatish',
   'catalog.showing': '{shown} / {total}',
 
   // ── Taom ──
   'product.title': 'Taom',
   'product.fastDelivery': 'Tez yetkazib berish',
-  'product.chooseColor': 'Turini tanlang',
-  'product.chooseSize': 'Porsiyani tanlang',
   'product.about': 'Taom haqida',
   'product.addToCart': "Savatga qo'shish",
   'product.soldOut': 'Tugagan',
@@ -93,8 +82,6 @@ export const uz = {
   'reviews.empty': "Hozircha sharhlar yo'q. Birinchi bo'lib baholang!",
   'reviews.needRating': 'Iltimos, yulduzchalar orqali baholang',
   'reviews.error': 'Xatolik yuz berdi',
-  'reviews.notPurchased': "Sharh qoldirish uchun avval bu taomni buyurtma qilishingiz kerak",
-  'reviews.alreadyLeft': 'Siz bu taomga sharh qoldirgansiz',
   'reviews.thanks': 'Sharhingiz uchun rahmat!',
   'reviews.myTitle': 'Mening sharhlarim',
   'reviews.myEmpty': "Sharhlar yo'q",
@@ -232,8 +219,6 @@ export const uz = {
   'profile.reviewsSub': 'Siz qoldirgan baholar',
   'profile.theme': "Ko'rinish",
   'profile.themeSub': "Yorug' yoki qorong'i rejim",
-  'theme.light': "Yorug'",
-  'theme.dark': "Qorong'i",
   'profile.language': 'Til',
   'profile.languageSub': "Ilova tilini o'zgartirish",
   'profile.help': "Yordam va qo'llab-quvvatlash",
@@ -246,10 +231,9 @@ export const uz = {
   'profile.userNotFound': 'Telegram foydalanuvchisi topilmadi',
 
   // ── Til ──
-  'language.title': 'Tilni tanlang',
   'language.uz': "O'zbekcha",
   'language.ru': 'Ruscha',
-  'language.changed': "Til o'zgartirildi",
+  'language.title': 'Tilni tanlang',
 
   // ── Manzillar ──
   'address.title': 'Mening manzillarim',
@@ -274,10 +258,6 @@ export const uz = {
   'notifications.emptyText': 'Hozircha sizga hech qanday xabar kelmagan.',
 
   // ── Telegram to'sig'i ──
-  'gate.title': 'Telegram orqali oching',
-  'gate.text':
-    "Restoran Telegram ilovasi ichida ishlaydi. Buyurtma berish uchun botni oching va «Menyuni ochish» tugmasini bosing.",
-  'gate.button': "Telegram'da ochish",
 
   // ── Restoran yopiq ──
   'closed.title': 'Restoran hozir yopiq',

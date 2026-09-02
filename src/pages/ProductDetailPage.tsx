@@ -13,7 +13,7 @@ import type { Product, Review } from '../types/domain'
 
 type Props = {
   product: Product
-  onAddToCart: (product: Product, size?: string, color?: string) => void
+  onAddToCart: (product: Product) => void
   onBack: () => void
   likedIds: number[]
   onToggleLike: (id: number) => void
@@ -29,11 +29,6 @@ export function ProductDetailPage({
   const t = useT()
   const [activeImage, setActiveImage] = useState(0)
   const [count, setCount] = useState(1)
-
-  const colorsList = product.colors
-    || (product.color ? product.color.split(',').map((c) => c.trim()).filter(Boolean) : [])
-  const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || '')
-  const [selectedColor, setSelectedColor] = useState(colorsList[0] || '')
 
   const favourite = likedIds.includes(product.id)
   const images = product.images || []
@@ -93,7 +88,7 @@ export function ProductDetailPage({
 
   const handleAddToCart = () => {
     if (soldOut) return
-    for (let i = 0; i < count; i++) onAddToCart(product, selectedSize, selectedColor)
+    for (let i = 0; i < count; i++) onAddToCart(product)
     setCount(1)
   }
 
@@ -199,39 +194,6 @@ export function ProductDetailPage({
           </p>
         )}
 
-        {colorsList.length > 0 && (
-          <section className="detail-panel">
-            <b style={{ color: 'var(--ink)' }}>{t('product.chooseColor')}</b>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {colorsList.map((c) => (
-                <button
-                  onClick={() => setSelectedColor(c)}
-                  className={'size-chip px-4 ' + (selectedColor === c ? 'active' : '')}
-                  key={c}
-                >
-                  <b>{c}</b>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {product.sizes && product.sizes.length > 0 && (
-          <section className="detail-panel">
-            <b style={{ color: 'var(--ink)' }}>{t('product.chooseSize')}</b>
-            <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-7">
-              {product.sizes.map((s) => (
-                <button
-                  onClick={() => setSelectedSize(s)}
-                  className={'size-chip ' + (selectedSize === s ? 'active' : '')}
-                  key={s}
-                >
-                  <b>{s}</b>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
 
         {product.description && (
           <section className="detail-panel">

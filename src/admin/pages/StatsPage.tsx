@@ -3,6 +3,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { Eye, ShoppingCart, TrendingUp, Wallet } from 'lucide-react'
 import { db } from '../../lib/firebase'
 import { useAdminData } from '../lib/data-context'
+import { useOrdersRange } from '../lib/use-orders-range'
 import { BarChart, type ChartPoint } from '../components/BarChart'
 import { Empty, StatCard } from '../components/ui'
 import { dayKey, dayLabel, money } from '../lib/format'
@@ -15,8 +16,14 @@ type DailyRow = { date: string; view?: number; cart_add?: number; checkout_start
 type ProductRow = { productId: string; view?: number; cart_add?: number }
 
 export function StatsPage() {
-  const { orders, products } = useAdminData()
+  const { products } = useAdminData()
   const [days, setDays] = useState<number>(30)
+  /*
+     Jonli obuna oxirgi N ta buyurtma bilan cheklangan, bu sahifa esa
+     90 kungacha ko'rsatadi. Tanlangan davr shu yerda alohida o'qiladi
+     va jonli ro'yxat bilan birlashtiriladi.
+  */
+  const { orders, ready } = useOrdersRange(days)
   const now = useNow()
   const [daily, setDaily] = useState<DailyRow[]>([])
   const [productViews, setProductViews] = useState<ProductRow[]>([])
@@ -153,8 +160,8 @@ export function StatsPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Tushum" value={money(report.revenue)} sub={`${report.count} ta buyurtma`} icon={<TrendingUp size={16} />} />
-        <StatCard label="O'rtacha chek" value={money(report.average)} icon={<Wallet size={16} />} />
+        <StatCard label="Tushum" value={money(report.revenue)} sub={`${report.count} ta buyurtma`} icon={<TrendingUp size={16} />} loading={!ready} />
+        <StatCard label="O'rtacha chek" value={money(report.average)} icon={<Wallet size={16} />} loading={!ready} />
         <StatCard
           label="Ko'rishlar"
           value={String(report.views.view)}
@@ -166,6 +173,7 @@ export function StatsPage() {
           value={`${conversion}%`}
           sub={`${report.cancelled} ta bekor qilingan`}
           icon={<ShoppingCart size={16} />}
+          loading={!ready}
         />
       </div>
 

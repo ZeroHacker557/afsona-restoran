@@ -37,10 +37,8 @@ export const storage = getStorage(app)
 
 // Real-time Firestore Listeners
 export function subscribeToProducts(callback: (products: Product[]) => void, onError?: (err: unknown) => void) {
-  console.log('[Firebase] Subscribing to products collection...')
   const productsRef = collection(db, 'products')
   return onSnapshot(productsRef, (snapshot) => {
-    console.log(`[Firebase] Products snapshot received: ${snapshot.size} documents`)
     const products: Product[] = snapshot.docs.map((doc) => {
       const data = doc.data()
       const rawId = data.id || doc.id
@@ -55,8 +53,6 @@ export function subscribeToProducts(callback: (products: Product[]) => void, onE
         images: data.images || [],
         rating: data.rating || 5,
         reviews: data.reviews || 0,
-        sizes: data.sizes || [],
-        color: data.color || '',
         description: data.description || '',
         discount: data.discount || '',
         stock: typeof data.stock === 'number' ? data.stock : undefined,
@@ -83,10 +79,8 @@ export function subscribeToProducts(callback: (products: Product[]) => void, onE
 }
 
 export function subscribeToCategories(callback: (categories: Category[]) => void, onError?: (err: unknown) => void) {
-  console.log('[Firebase] Subscribing to categories collection...')
   const categoriesRef = collection(db, 'categories')
   return onSnapshot(categoriesRef, (snapshot) => {
-    console.log(`[Firebase] Categories snapshot received: ${snapshot.size} documents`)
     const categories: Category[] = snapshot.docs.map((doc) => {
       const data = doc.data()
       const rawId = data.id || doc.id
@@ -320,7 +314,15 @@ export function subscribeToUserNotifications(userId: number, callback: (notifica
     const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification))
     // ISO sana bo'yicha saralash; eski formatlar oxiriga tushadi (F-10)
     notifs.sort((a, b) => parseDate(b.date) - parseDate(a.date))
-    callback(notifs)
+    /*
+       Ekranga eng yangi 50 tasi chiqadi. Server tomonda ham har mijozda
+       saqlanadigan son cheklangan (`pushNotification` eskilarini
+       o'chiradi) — bu yerdagi kesish esa qo'shimcha kafolat.
+
+       Firestore'da `where` + `orderBy` birga composite indeks talab
+       qiladi, shuning uchun saralash va kesish shu yerda bajariladi.
+    */
+    callback(notifs.slice(0, 50))
   }, (error) => {
     console.error("Error fetching notifications:", error)
   })

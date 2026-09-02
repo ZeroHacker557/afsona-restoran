@@ -7,7 +7,6 @@ o'qiladi — kodda token va karta raqami saqlanmaydi. Namuna: `.env.example`.
 Katalog, buyurtma va to'lov sozlamalari endi bu yerda emas: ularni
 `/admin` boshqaruv paneli Firestore'da saqlaydi.
 """
-import json
 import os
 from pathlib import Path
 
@@ -67,54 +66,13 @@ API_BASE_URL = os.environ.get('ADMIN_PANEL_URL', '').replace('/admin', '').rstri
 BOT_API_SECRET = os.environ.get('BOT_API_SECRET', '').strip()
 
 # ─── Firebase ────────────────────────────────────────────────
-# Service account JSON fayli (bot uchun). Yo'l ko'rsatilmasa, loyiha
-# ildizidagi *-firebase-adminsdk-*.json fayli qidiriladi.
-FIREBASE_KEY_FILE = os.environ.get('FIREBASE_KEY_FILE', '').strip()
-FIREBASE_STORAGE_BUCKET = os.environ.get('FIREBASE_STORAGE_BUCKET', '').strip()
-
-# Service account JSON butunligicha env o'zgaruvchida ham berilishi mumkin.
-# Hostingga (Railway va h.k.) qo'yilganda fayl yuklab bo'lmaydi — kalit
-# git'ga tushmaydi va tushmasligi ham kerak. Shuning uchun u yerda shu
-# yo'l ishlatiladi; kompyuterda esa oddiy fayl topiladi.
-FIREBASE_SERVICE_ACCOUNT = os.environ.get('FIREBASE_SERVICE_ACCOUNT', '').strip()
-
-
-def service_account_info() -> dict | None:
-    """Env orqali berilgan service account. Berilmagan bo'lsa None."""
-    if not FIREBASE_SERVICE_ACCOUNT:
-        return None
-
-    try:
-        data = json.loads(FIREBASE_SERVICE_ACCOUNT)
-    except json.JSONDecodeError as error:
-        raise RuntimeError(
-            f'FIREBASE_SERVICE_ACCOUNT yaroqli JSON emas: {error}'
-        ) from error
-
-    # Env o'zgaruvchida yangi qatorlar ko'pincha \n bo'lib qoladi
-    key = data.get('private_key')
-    if isinstance(key, str):
-        data['private_key'] = key.replace('\\n', '\n')
-
-    return data
-
-
-def find_service_account() -> str:
-    """Service account JSON faylining yo'lini topadi."""
-    if FIREBASE_KEY_FILE:
-        candidate = Path(FIREBASE_KEY_FILE)
-        if not candidate.is_absolute():
-            candidate = ROOT_DIR / FIREBASE_KEY_FILE
-        if candidate.exists():
-            return str(candidate)
-        raise RuntimeError(f"FIREBASE_KEY_FILE topilmadi: {candidate}")
-
-    for directory in (ROOT_DIR, BASE_DIR):
-        matches = sorted(directory.glob('*firebase-adminsdk*.json'))
-        if matches:
-            return str(matches[0])
-
-    raise RuntimeError(
-        "Firebase service account JSON fayli topilmadi. Uni loyiha ildiziga "
-        "qo'ying yoki .env da FIREBASE_KEY_FILE yo'lini ko'rsating."
-    )
+#
+# Bot Firebase bilan ISHLAMAYDI va unga hech qanday kalit kerak emas.
+#
+# Ilgari bot Firestore'ga to'g'ridan-to'g'ri murojaat qilardi, shu sababli
+# butun bazaga to'liq huquq beruvchi service account kaliti bot serverida
+# (Railway) turishi kerak edi. Aslida botga atigi uchta narsa kerak:
+# restoran aloqasi, ish vaqti va foydalanuvchi telefoni — ular endi
+# `BOT_API_SECRET` bilan himoyalangan API orqali olinadi.
+#
+# Ya'ni bot serveri buzilsa ham, u orqali bazaga kirib bo'lmaydi.

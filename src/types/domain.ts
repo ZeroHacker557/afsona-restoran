@@ -9,14 +9,11 @@ export type Product = {
   price: number
   oldPrice?: number
   category: string
-  color?: string
-  colors?: string[]
   rating: number
   reviews: number
   images: string[]
   description?: string
   discount?: string
-  sizes?: string[]
   /** Ombordagi qoldiq. undefined — hisob yuritilmaydi (eski mahsulotlar). */
   stock?: number
   /** false — stop-list: taom vaqtincha sotuvda emas. */
