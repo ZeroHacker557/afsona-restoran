@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { initializeFirestore, collection, onSnapshot, query, where, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
+import { initializeFirestore, collection, onSnapshot, query, where, orderBy, limit, doc, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { parseDate } from '../utils/date'
 import { DEFAULT_HOURS, readHours, type WorkingHours } from '../utils/hours'
@@ -237,9 +237,22 @@ export async function updateUserProfile(userId: number, data: Partial<UserProfil
 // Subscribe to User Orders
 export function subscribeToUserOrders(userId: number, callback: (orders: Order[]) => void) {
   const ordersRef = collection(db, 'orders')
-  // We only use 'where' to avoid requiring a composite index in Firestore.
-  // Sorting will be done on the client side.
-  const q = query(ordersRef, where('userId', '==', userId))
+  /*
+     Saralash va chegara SERVERDA bajariladi.
+
+     Buning uchun `(userId, createdAt DESC)` composite indeksi kerak —
+     u `firestore.indexes.json` da yozilgan va loyihaga chiqarilgan.
+     Ilgari indeks yo'qligi sababli mijozning BUTUN buyurtmalar tarixi
+     yuklanar, saralash esa telefonda bajarilardi.
+
+     100 ta — hech kim bundan ko'proq eski buyurtmasini ko'rmaydi.
+  */
+  const q = query(
+    ordersRef,
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc'),
+    limit(100),
+  )
   
   return onSnapshot(q, (snapshot) => {
     const orders = snapshot.docs.map((snap) => {
@@ -306,23 +319,23 @@ export function subscribeToUserReviews(userId: number, callback: (reviews: Revie
 // ==========================================
 
 export function subscribeToUserNotifications(userId: number, callback: (notifications: Notification[]) => void) {
+  /*
+     Saralash va chegara serverda — `(userId, date DESC)` indeksi bilan.
+     Ilgari mijozning barcha bildirishnomalari yuklanardi.
+  */
   const q = query(
     collection(db, 'notifications'),
-    where('userId', '==', userId)
+    where('userId', '==', userId),
+    orderBy('date', 'desc'),
+    limit(50),
   )
   return onSnapshot(q, (snapshot) => {
     const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification))
     // ISO sana bo'yicha saralash; eski formatlar oxiriga tushadi (F-10)
     notifs.sort((a, b) => parseDate(b.date) - parseDate(a.date))
-    /*
-       Ekranga eng yangi 50 tasi chiqadi. Server tomonda ham har mijozda
-       saqlanadigan son cheklangan (`pushNotification` eskilarini
-       o'chiradi) — bu yerdagi kesish esa qo'shimcha kafolat.
-
-       Firestore'da `where` + `orderBy` birga composite indeks talab
-       qiladi, shuning uchun saralash va kesish shu yerda bajariladi.
-    */
-    callback(notifs.slice(0, 50))
+    // Saralash allaqachon serverda bo'ldi; bu yerdagisi — eski
+    // yozuvlarda `date` formati boshqacha bo'lsa, tartib buzilmasin
+    callback(notifs)
   }, (error) => {
     console.error("Error fetching notifications:", error)
   })

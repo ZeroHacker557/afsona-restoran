@@ -123,17 +123,10 @@ Har mijozda **100 tadan** ko'p bildirishnoma saqlanmaydi: yangi yozuv
 qo'shilganda (o'rtacha har 20-marta) eng eskilari o'chiriladi. Ilova
 ekranga eng yangi 50 tasini chiqaradi.
 
-> **Eslatma:** to'g'ri yo'l `where('userId') + orderBy('date') + limit`
-> bo'lardi, lekin unga Firestore'da composite indeks kerak. Indeks
-> yaratishga urinib ko'rdim — service account'da ruxsat yo'q
-> (`PERMISSION_DENIED`). Shuning uchun soni cheklandi, saralash esa
-> mijoz tomonida qoldi. Natija bir xil, xarajat esa hozirgi hajmda
-> sezilmaydi.
->
-> `firestore.indexes.json` va `scripts/deploy-indexes.mjs` tayyor turibdi.
-> Google Cloud konsolida service account'ga **Cloud Datastore Index
-> Admin** rolini bersangiz, `node scripts/deploy-indexes.mjs` ishlaydi va
-> keyin so'rovlarni chinakam serverda tartiblash mumkin bo'ladi.
+> **Keyinchalik to'liq hal qilindi** — pastdagi «Indekslar» bo'limiga
+> qarang. Dastlab service account'da indeks yaratish ruxsati yo'q edi,
+> shuning uchun faqat son cheklangan va saralash mijoz tomonida qolgan
+> edi.
 
 ### B-11 — Telegram navbati
 
@@ -373,6 +366,40 @@ Jonli sinov (keyin hammasi asl holiga qaytarildi):
   tozalandi (taom reytingi aynan asl qiymatiga qaytarildi)
 - Firestore qoidasiga `users/{id}/purchased` qo'shildi va chiqarildi
 - `tsc`, `eslint`, `vite build` — toza
+
+
+---
+
+## ✅ INDEKSLAR — 2026-09-02
+
+Buyurtmachi Google Cloud konsolida service account'ga **Cloud Datastore
+Index Admin** rolini berdi. Shundan keyin:
+
+```
+notifications: userId ↑, date ↓      — READY
+orders:        userId ↑, createdAt ↓ — READY
+```
+
+Endi mini app saralash va chegarani **serverda** bajaradi:
+
+| So'rov | Ilgari | Endi |
+|---|---|---|
+| Mijoz buyurtmalari | butun tarix yuklanar, telefonda saralanardi | `orderBy + limit(100)` |
+| Bildirishnomalar | hammasi yuklanar, telefonda saralanardi | `orderBy + limit(50)` |
+
+Ya'ni mijozning telefoniga faqat kerakli ma'lumot keladi. Server tomonda
+bildirishnoma soni cheklovi (`NOT_KEEP = 100`) ham qoladi — u
+saqlanadigan hajmni ushlab turadi.
+
+**Tekshirilgani** (jonli bazada, haqiqiy mijoz ID'si bilan):
+- buyurtmalar: 19 ta, eng yangisi `#1023`, tartib to'g'ri
+- bildirishnomalar: aynan 50 ta qaytdi (chegara ishlayapti), tartib to'g'ri
+- `tsc`, 77 ta test, `vite build` — toza; mini app ishlayapti
+
+> `scripts/deploy-indexes.mjs` dagi ro'yxat chiqishida xato bor edi:
+> Firestore'ning bu endpointi yo'ldagi kolleksiya nomiga qaramay
+> BARCHA indekslarni qaytarar ekan, natijada har indeks ikki marta,
+> noto'g'ri nom bilan chiqardi. Tuzatildi.
 
 ---
 

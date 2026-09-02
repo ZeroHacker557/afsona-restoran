@@ -69,15 +69,23 @@ for (const index of config.indexes) {
   }
 }
 
-// Holatni ko'rsatamiz
+/*
+   Holatni ko'rsatamiz.
+
+   Diqqat: Firestore'ning bu endpointi yo'ldagi kolleksiya nomiga
+   QARAMAYDI — u bazadagi BARCHA indekslarni qaytaradi. Shuning uchun
+   bir marta so'raymiz, guruh nomini esa indeksning o'z `name`
+   maydonidan olamiz.
+*/
 console.log('\n📋 Hozirgi indekslar:')
-for (const group of [...new Set(config.indexes.map((i) => i.collectionGroup))]) {
-  const list = await api('GET', `${BASE}/collectionGroups/${group}/indexes`)
-  for (const index of list.data?.indexes || []) {
-    const fields = (index.fields || [])
-      .filter((f) => f.fieldPath !== '__name__')
-      .map((f) => `${f.fieldPath} ${f.order === 'DESCENDING' ? '↓' : '↑'}`)
-      .join(', ')
-    if (fields) console.log(`   ${group}: ${fields} — ${index.state}`)
-  }
+const birinchiGuruh = config.indexes[0]?.collectionGroup || 'orders'
+const list = await api('GET', `${BASE}/collectionGroups/${birinchiGuruh}/indexes`)
+
+for (const index of list.data?.indexes || []) {
+  const group = String(index.name || '').split('/collectionGroups/')[1]?.split('/')[0] || '?'
+  const fields = (index.fields || [])
+    .filter((f) => f.fieldPath !== '__name__')
+    .map((f) => `${f.fieldPath} ${f.order === 'DESCENDING' ? '↓' : '↑'}`)
+    .join(', ')
+  if (fields) console.log(`   ${group}: ${fields} — ${index.state}`)
 }
