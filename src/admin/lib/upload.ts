@@ -16,9 +16,16 @@ function safeName(file: File): string {
   return `${Date.now()}_${random}.${extension}`
 }
 
-/** Taom rasmi. Qaytadigan qiymat — ochiq (public) havola. */
+/**
+ * Taom rasmi. Qaytadigan qiymat — ochiq (public) havola.
+ *
+ * `keepAlpha` — shaffof fonli rasm (masalan kesib olingan taom surati)
+ * qora fon bilan qolmasligi uchun. Ilgari hamma rasm JPEG'ga
+ * aylantirilardi, JPEG'da esa shaffoflik yo'q: shaffof joylar qora
+ * bo'lib chiqar va menyuda yaqqol ko'rinardi.
+ */
 export async function uploadProductImage(file: File): Promise<string> {
-  const { blob, contentType } = await prepareImage(file)
+  const { blob, contentType } = await prepareImage(file, { keepAlpha: true })
   const target = ref(storage, `products/${safeName(file)}`)
   await uploadBytes(target, blob, { contentType })
   return getDownloadURL(target)
@@ -26,7 +33,9 @@ export async function uploadProductImage(file: File): Promise<string> {
 
 /** Xabarnoma uchun rasm yoki video (Telegram shu havoladan yuklab oladi). */
 export async function uploadBroadcastMedia(file: File): Promise<string> {
-  // Video siqilmaydi — u qanday bo'lsa, shundayligicha ketadi
+  // Video siqilmaydi — u qanday bo'lsa, shundayligicha ketadi.
+  // Rasm JPEG bo'lib qoladi: bu fayl Telegram'ga yuboriladi, u yerda
+  // shaffoflik baribir ko'rinmaydi va JPEG ishonchliroq qabul qilinadi.
   const prepared = file.type.startsWith('image/')
     ? await prepareImage(file)
     : { blob: file as Blob, contentType: file.type || 'application/octet-stream' }
