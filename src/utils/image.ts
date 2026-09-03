@@ -102,9 +102,12 @@ function hasTransparency(
  *
  * @param maxSide   eng uzun tomon, piksel
  * @param maxBytes  ruxsat etilgan eng katta hajm
- * @param keepAlpha shaffoflikni saqlash kerakmi. Menyu rasmlari uchun
- *                  — ha (shaffof PNG qora bo'lib qolmasin). Telegramga
- *                  ketadigan rasmlar uchun — yo'q, u yerda JPEG kerak.
+ * @param keepAlpha  shaffoflikni saqlash kerakmi. Menyu rasmlari uchun
+ *                   — ha (shaffof PNG qora bo'lib qolmasin). Telegramga
+ *                   ketadigan rasmlar uchun — yo'q, u yerda JPEG kerak.
+ * @param preferWebp shaffof bo'lmaganda ham WebP ishlatilsinmi. Bir xil
+ *                   sifatda JPEG'dan ~25-30% yengil — menyu tezroq
+ *                   ochiladi. Telegramga ketadigan rasmlarda ishlatilmaydi.
  */
 export async function prepareImage(
   file: File,
@@ -112,7 +115,13 @@ export async function prepareImage(
     maxSide = 1400,
     maxBytes = 6_500_000,
     keepAlpha = false,
-  }: { maxSide?: number; maxBytes?: number; keepAlpha?: boolean } = {},
+    preferWebp = false,
+  }: {
+    maxSide?: number
+    maxBytes?: number
+    keepAlpha?: boolean
+    preferWebp?: boolean
+  } = {},
 ): Promise<PreparedImage> {
   // GIF va SVG'ni qayta chizsak animatsiya/vektor yo'qoladi — hajmi
   // joyida bo'lsa, o'zini yuboramiz.
@@ -137,16 +146,21 @@ export async function prepareImage(
     if (!context) throw new Error('Brauzer rasmni qayta ishlay olmadi')
 
     /*
-       Shaffof rasmni JPEG qilib bo'lmaydi — shaffof joylar qora bo'lib
-       qoladi. Menyu kartochkasida bu yaqqol ko'rinadi, ayniqsa yorug'
-       rejimda. Bunday holatda WebP ishlatamiz: u shaffoflikni saqlaydi
-       va JPEG'ga yaqin siqadi.
+       Format tanlash.
 
-       Brauzer WebP chiqara olmasa, `toBlob` o'zi PNG qaytaradi —
-       natijaviy `blob.type` ni o'qib, aynan shuni yozamiz.
+       WebP — bir xil ko'rinish uchun JPEG'dan ~25-30% yengil va
+       shaffoflikni ham saqlaydi. Menyu rasmlari uchun aynan shu kerak:
+       sahifa tezroq ochiladi, sifat esa o'zgarmaydi.
+
+       Shaffof rasmni JPEG qilib bo'lmaydi — shaffof joylar qora bo'lib
+       qoladi (menyu kartochkasida yaqqol ko'rinadi).
+
+       Telegram'ga ketadigan rasmlar (`preferWebp` berilmagan) JPEG
+       bo'lib qoladi: Telegram `sendPhoto` da WebP'ni ishonchli qabul
+       qilmaydi.
     */
     const shaffof = keepAlpha && hasTransparency(source)
-    const type = shaffof ? 'image/webp' : 'image/jpeg'
+    const type = shaffof || preferWebp ? 'image/webp' : 'image/jpeg'
 
     // Kerak bo'lsa bir necha marta kichraytirib ko'ramiz
     for (const [side, quality] of [
@@ -162,7 +176,17 @@ export async function prepareImage(
       context.clearRect(0, 0, canvas.width, canvas.height)
       source.draw(context, canvas.width, canvas.height)
 
-      const blob = await toBlob(canvas, quality, type)
+      let blob = await toBlob(canvas, quality, type)
+
+      /*
+         Brauzer WebP chiqara olmasa, `toBlob` jimgina PNG qaytaradi —
+         u esa surat uchun juda og'ir. Shaffoflik shart bo'lmasa,
+         JPEG'ga qaytamiz.
+      */
+      if (blob && type === 'image/webp' && blob.type !== 'image/webp' && !shaffof) {
+        blob = await toBlob(canvas, quality, 'image/jpeg')
+      }
+
       if (blob && blob.size <= maxBytes) {
         // Asl fayl kichikroq bo'lsa (masalan allaqachon siqilgan), o'shani
         // olamiz. Shaffof rasmda bu ayniqsa foydali: asl PNG saqlanadi.

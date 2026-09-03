@@ -5,9 +5,21 @@ import { getImageUrl } from '../../utils/telegram'
 import { useT } from '../../i18n'
 import type { Product, ProductActions } from '../../types/domain'
 
-type Props = ProductActions & { product: Product; compact?: boolean }
+type Props = ProductActions & {
+  product: Product
+  compact?: boolean
+  /**
+   * Ekranning yuqorisidagi, darhol ko'rinadigan kartami.
+   *
+   * `loading="lazy"` ekranda TURGAN rasm uchun ham kechikish beradi:
+   * brauzer avval joylashuvni hisoblaydi, keyin yuklashni boshlaydi.
+   * Birinchi kartalar uchun buni o'chirib, ustuvorlikni oshiramiz —
+   * menyu sezilarli tez ochiladi.
+   */
+  priority?: boolean
+}
 
-export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLike, compact = false }: Props) {
+export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLike, compact = false, priority = false }: Props) {
   const t = useT()
   const favourite = likedIds.includes(product.id)
   const imgSrc = product.images?.[0] ? getImageUrl(product.images[0]) : ''
@@ -39,7 +51,8 @@ export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLi
               className="product-card-img"
               src={imgSrc}
               alt={product.name}
-              loading="lazy"
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
               decoding="async"
               onError={() => setImgError(true)}
             />

@@ -267,8 +267,14 @@ export function CatalogPage({
         ) : page.length > 0 ? (
           <>
             <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {page.map((product) => (
-                <ProductCard key={product.id} product={product} {...actions} />
+              {page.map((product, index) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  // Ekranning birinchi ekraniga tushadigan kartalar
+                  priority={index < 6}
+                  {...actions}
+                />
               ))}
             </div>
 

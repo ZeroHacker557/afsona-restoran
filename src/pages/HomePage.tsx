@@ -192,8 +192,14 @@ export function HomePage({
           <ProductRowSkeleton />
         ) : products.length > 0 ? (
           <div className="mt-5 flex gap-4 overflow-x-auto pb-2 scrollbar-none">
-            {products.slice(0, 8).map((product) => (
-              <ProductCard key={product.id} product={product} compact {...productActions} />
+            {products.slice(0, 8).map((product, index) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                compact
+                priority={index < 4}
+                {...productActions}
+              />
             ))}
           </div>
         ) : (
