@@ -63,7 +63,7 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<AdminOrder[]>([])
   const [promos, setPromos] = useState<AdminPromo[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
-  const [delivery, setDelivery] = useState<DeliverySettings>({ fee: 0, freeFrom: 0, minOrder: 0 })
+  const [delivery, setDelivery] = useState<DeliverySettings>({ fee: 0, freeFrom: 0, minOrder: 0, pickupEnabled: false })
   const [payment, setPayment] = useState<PaymentSettings>({ cardNumber: '', cardOwner: '' })
   const [brand, setBrand] = useState<BrandSettings>({ name: '', phone: '', telegram: '', email: '', address: '' })
   const [hours, setHours] = useState<WorkingHours>(DEFAULT_HOURS)

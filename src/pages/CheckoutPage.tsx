@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import {
   Clock,
   ArrowLeft, Banknote, Check, Copy, CreditCard, Loader2, MapPin,
-  MessageSquare, Phone, Send, ShoppingBag, Tag, User,
+  MessageSquare, Phone, Send, ShoppingBag, Store, Tag, Truck, User,
 } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl, hapticFeedback } from '../utils/telegram'
-import { getPaymentSettings, getDeliverySettings } from '../lib/firebase'
+import { getPaymentSettings, getDeliverySettings, getBrandInfo } from '../lib/firebase'
 import { apiPost, ApiError } from '../lib/api'
 import { useT } from '../i18n'
 import { orderTotal } from '../utils/pricing'
@@ -47,15 +47,37 @@ export function CheckoutPage({
   const [promoError, setPromoError] = useState('')
   const [payment, setPayment] = useState<PaymentSettings | null>(null)
   const [delivery, setDelivery] = useState<DeliverySettings | null>(null)
+  const [brand, setBrand] = useState<{ address: string; phone: string } | null>(null)
 
   const addresses = profile?.addresses || []
+
+  const pickup = orderForm.deliveryType === 'pickup'
+  /*
+     Tanlov faqat admin yoqib qo'ygandagina ko'rinadi. Sozlama hali
+     yuklanmagan bo'lsa ham ko'rsatmaymiz — keyin sakrab paydo
+     bo'lgandan ko'ra, kelganda bir marta chiqqani yaxshi.
+  */
+  const pickupAvailable = delivery?.pickupEnabled === true
 
   useEffect(() => {
     let alive = true
     getPaymentSettings().then((s) => alive && setPayment(s))
     getDeliverySettings().then((s) => alive && setDelivery(s))
+    getBrandInfo().then((s) => alive && setBrand({ address: s.address, phone: s.phone }))
     return () => { alive = false }
   }, [])
+
+  /*
+     Mijoz oldingi safar olib ketishni tanlagan bo'lishi mumkin, admin
+     esa oradan keyin uni o'chirib qo'ygan. Bunday holatda tanlovni
+     jimgina yetkazishga qaytaramiz — aks holda mijoz manzilsiz forma
+     to'ldirib, oxirida serverdan rad javobini olardi.
+  */
+  useEffect(() => {
+    if (delivery && delivery.pickupEnabled !== true && orderForm.deliveryType === 'pickup') {
+      onUpdateForm('deliveryType', 'delivery')
+    }
+  }, [delivery, orderForm.deliveryType, onUpdateForm])
 
   // Profil ma'lumotlari bilan avtomatik to'ldirish.
   // Render paytida emas, effekt ichida — aks holda React ogohlantiradi (F-11).
@@ -73,7 +95,7 @@ export function CheckoutPage({
   const discount = appliedPromo?.discount ?? 0
   const discountedSubtotal = Math.max(cartTotal - discount, 0)
   const deliveryFee =
-    delivery === null || (delivery.freeFrom > 0 && discountedSubtotal >= delivery.freeFrom)
+    pickup || delivery === null || (delivery.freeFrom > 0 && discountedSubtotal >= delivery.freeFrom)
       ? 0
       : delivery.fee
   // Formula server bilan bitta joyda — `shared/pricing.ts`
@@ -116,7 +138,9 @@ export function CheckoutPage({
     onUpdateForm('promoCode', undefined)
   }
 
-  const isValid = Boolean(orderForm.name.trim() && orderForm.phone.trim() && orderForm.address.trim())
+  const isValid = Boolean(
+    orderForm.name.trim() && orderForm.phone.trim() && (pickup || orderForm.address.trim()),
+  )
   const canSubmit = isValid && !isSubmitting
 
   return (
@@ -248,8 +272,14 @@ export function CheckoutPage({
               )}
 
               <div className="flex justify-between">
-                <span style={{ color: 'var(--muted)' }}>{t('checkout.delivery')}</span>
-                {delivery === null ? (
+                <span style={{ color: 'var(--muted)' }}>
+                  {pickup ? t('checkout.pickup') : t('checkout.delivery')}
+                </span>
+                {pickup ? (
+                  <span className="font-bold" style={{ color: 'var(--success)' }}>
+                    {t('checkout.deliveryFree')}
+                  </span>
+                ) : delivery === null ? (
                   <span className="skeleton h-4 w-16" />
                 ) : deliveryFee === 0 ? (
                   <span className="font-bold" style={{ color: 'var(--success)' }}>{t('checkout.deliveryFree')}</span>
@@ -258,7 +288,7 @@ export function CheckoutPage({
                 )}
               </div>
 
-              {delivery !== null && delivery.freeFrom > 0 && deliveryFee > 0 && (
+              {!pickup && delivery !== null && delivery.freeFrom > 0 && deliveryFee > 0 && (
                 <p className="pt-1 text-[11px]" style={{ color: 'var(--faint)' }}>
                   {t('checkout.freeFrom', { amount: formatPrice(delivery.freeFrom) })}
                 </p>
@@ -272,9 +302,57 @@ export function CheckoutPage({
           </div>
         </section>
 
-        {/* Yetkazib berish ma'lumotlari */}
+        {/* Buyurtmani qanday olish + aloqa ma'lumotlari */}
         <section className="mt-6">
-          <h3 className="mb-4 font-bold" style={{ color: 'var(--ink)' }}>{t('checkout.deliveryInfo')}</h3>
+          {/*
+             Tanlov manzil maydonidan OLDIN turadi: u manzil so'ralishini
+             hal qiladi, shuning uchun mijoz avval shuni tanlashi kerak.
+             Ko'rinishi to'lov usuli tugmalari bilan bir xil — tanish.
+          */}
+          {pickupAvailable && (
+            <>
+              <h3 className="mb-4 font-bold" style={{ color: 'var(--ink)' }}>
+                {t('checkout.howToGet')}
+              </h3>
+              <div className="mb-6 flex gap-3">
+                {([
+                  {
+                    id: 'delivery' as const,
+                    Icon: Truck,
+                    label: t('checkout.wayDelivery'),
+                    sub: delivery && delivery.fee > 0 ? formatPrice(delivery.fee) : t('checkout.deliveryFree'),
+                  },
+                  {
+                    id: 'pickup' as const,
+                    Icon: Store,
+                    label: t('checkout.wayPickup'),
+                    sub: t('checkout.deliveryFree'),
+                  },
+                ]).map(({ id, Icon, label, sub }) => {
+                  const selected = orderForm.deliveryType === id
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => { hapticFeedback(); onUpdateForm('deliveryType', id) }}
+                      className="flex-1 rounded-2xl border-2 p-4 text-left transition active:scale-95"
+                      style={{
+                        borderColor: selected ? 'var(--brand)' : 'var(--line)',
+                        background: selected ? 'var(--brand-soft)' : 'var(--surface)',
+                      }}
+                    >
+                      <Icon size={22} style={{ color: selected ? 'var(--brand)' : 'var(--faint)' }} />
+                      <p className="mt-2 text-sm font-bold" style={{ color: 'var(--ink)' }}>{label}</p>
+                      <p className="text-xs" style={{ color: 'var(--muted)' }}>{sub}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          <h3 className="mb-4 font-bold" style={{ color: 'var(--ink)' }}>
+            {pickup ? t('checkout.contactInfo') : t('checkout.deliveryInfo')}
+          </h3>
           <div className="space-y-5">
             <div>
               <label className="field-label">
@@ -308,6 +386,33 @@ export function CheckoutPage({
               </div>
             </div>
 
+            {pickup ? (
+              /*
+                 Olib ketishda mijozdan manzil so'ralmaydi — aksincha,
+                 unga RESTORAN manzili ko'rsatiladi. Aks holda "qayerga
+                 borishim kerak?" degan savol bilan qo'ng'iroq qiladi.
+              */
+              <div>
+                <label className="field-label">{t('checkout.pickupWhere')}</label>
+                <div
+                  className="flex items-start gap-3 rounded-2xl border p-4"
+                  style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}
+                >
+                  <Store size={19} className="mt-0.5 shrink-0" style={{ color: 'var(--brand)' }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>
+                      {brand?.address || t('checkout.pickupAskPhone')}
+                    </p>
+                    {!!brand?.phone && (
+                      <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>{brand.phone}</p>
+                    )}
+                    <p className="mt-2 text-xs" style={{ color: 'var(--muted)' }}>
+                      {t('checkout.pickupReadyNote')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div>
               <label className="field-label">
                 {t('checkout.address')} <span style={{ color: 'var(--danger)' }}>*</span>
@@ -371,6 +476,7 @@ export function CheckoutPage({
                 </div>
               )}
             </div>
+            )}
 
             <div>
               <label className="field-label">
@@ -394,6 +500,25 @@ export function CheckoutPage({
         <section className="mt-6">
           <h3 className="mb-4 font-bold" style={{ color: 'var(--ink)' }}>{t('checkout.paymentMethod')}</h3>
 
+          {/*
+             Olib ketishda tanlov yo'q: to'lov faqat joyida, naqd. Karta
+             o'tkazmasi bu yerda ishlamaydi — mijoz kelmay qolsa pulni
+             qaytarish muammosi tug'iladi, restoran esa tayyorlangan
+             taom bilan qoladi. Server ham shuni majburlaydi.
+          */}
+          {pickup ? (
+            <div
+              className="flex items-center gap-3 rounded-2xl border-2 p-4"
+              style={{ borderColor: 'var(--brand)', background: 'var(--brand-soft)' }}
+            >
+              <Banknote size={22} style={{ color: 'var(--brand)' }} />
+              <div>
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{t('checkout.cash')}</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>{t('checkout.pickupPayNote')}</p>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="flex gap-3">
             {([
               { id: 'Naqd' as const, Icon: Banknote, label: t('checkout.cash'), sub: t('checkout.cashSub') },
@@ -462,6 +587,8 @@ export function CheckoutPage({
                 {t('checkout.cardNote')}
               </p>
             </div>
+          )}
+          </>
           )}
         </section>
 

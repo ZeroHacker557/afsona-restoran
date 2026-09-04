@@ -131,9 +131,30 @@ const PAYMENT_FALLBACK: PaymentSettings = {
   cardOwner: '',
 }
 
-const DELIVERY_FALLBACK: DeliverySettings = { fee: 0, freeFrom: 0 }
+const DELIVERY_FALLBACK: DeliverySettings = { fee: 0, freeFrom: 0, pickupEnabled: false }
 
-/** Yetkazib berish narxi — settings/delivery hujjatidan. */
+/**
+ * Restoran ma'lumotlari — manzil va telefon.
+ *
+ * Olib ketishda mijozga qayerga borishini ko'rsatish uchun kerak.
+ * `settings/brand` qoidalarda ochiq o'qiladi.
+ */
+export async function getBrandInfo(): Promise<{ address: string; phone: string; name: string }> {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'brand'))
+    const data = snap.exists() ? snap.data() : {}
+    return {
+      address: String(data.address || ''),
+      phone: String(data.phone || ''),
+      name: String(data.name || ''),
+    }
+  } catch (error) {
+    console.error("[Firebase] Restoran ma'lumotini o'qib bo'lmadi:", error)
+    return { address: '', phone: '', name: '' }
+  }
+}
+
+/** Yetkazib berish sozlamalari — settings/delivery hujjatidan. */
 export async function getDeliverySettings(): Promise<DeliverySettings> {
   try {
     const snap = await getDoc(doc(db, 'settings', 'delivery'))
@@ -142,6 +163,7 @@ export async function getDeliverySettings(): Promise<DeliverySettings> {
     return {
       fee: Math.max(Number(data.fee) || 0, 0),
       freeFrom: Math.max(Number(data.freeFrom) || 0, 0),
+      pickupEnabled: data.pickupEnabled === true,
     }
   } catch (error) {
     console.error("[Firebase] Yetkazish sozlamalarini o'qib bo'lmadi:", error)

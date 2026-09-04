@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
+import { isPickup } from './_lib/delivery.js'
 import {
   ADMINS_DOC,
   allowedAdminEmails,
@@ -602,6 +603,15 @@ async function handleOrderStatus(req: VercelRequest, res: VercelResponse) {
   */
   const alreadySent = Array.isArray(order.data.courierMsgs) && order.data.courierMsgs.length > 0
   const actionable = status !== 'Yangi' && !cancelled
+
+  /*
+     Olib ketish buyurtmasi kuryerlarga umuman yuborilmaydi: bormaydigan
+     manzilsiz buyurtma guruhda turishi kuryerlarni chalg'itadi va
+     «bu kimniki?» degan savol tug'diradi.
+  */
+  if (isPickup(order.data)) {
+    return res.status(200).json({ ok: true })
+  }
 
   if (!alreadySent && actionable) {
     const sent = await notifyCouriersNewOrder(updated)

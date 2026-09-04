@@ -1,5 +1,6 @@
 import { escapeHtml, sendLocation, sendMessage, type Button } from './telegram.js'
 import { adminDb } from './firebase-admin.js'
+import { isPickup } from './delivery.js'
 
 /**
  * Buyurtma bilan bog'liq xabarlar — mijozga ham, adminlarga ham.
@@ -15,6 +16,8 @@ export type OrderDoc = {
   total?: number
   discount?: number
   deliveryFee?: number
+  /** 'pickup' — mijoz o'zi olib ketadi. Yo'q bo'lsa — yetkazish. */
+  deliveryType?: 'delivery' | 'pickup'
   /** Idishlar uchun jami. Eski buyurtmalarda yo'q. */
   containerFee?: number
   paymentMethod?: string
@@ -249,6 +252,9 @@ export async function sendOrderLocation(
   const lat = Number(location?.lat)
   const lng = Number(location?.lng)
 
+  if (isPickup(order)) {
+    return { sent: 0, error: 'Bu — olib ketish buyurtmasi, yetkazish manzili yo‘q' }
+  }
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return { sent: 0, error: 'Bu buyurtmada xarita nuqtasi yo‘q' }
   }
@@ -272,14 +278,20 @@ export async function sendOrderLocation(
   return { sent }
 }
 
-/** Aloqa telefoni — settings/brand hujjatidan. */
-async function brandPhone(): Promise<string> {
+/** Aloqa ma'lumotlari — settings/brand hujjatidan. */
+async function brandContact(): Promise<{ phone: string; address: string }> {
   try {
     const snap = await (await adminDb()).collection('settings').doc('brand').get()
-    return snap.exists ? String(snap.data()?.phone || '') : ''
+    if (!snap.exists) return { phone: '', address: '' }
+    const data = snap.data() || {}
+    return { phone: String(data.phone || ''), address: String(data.address || '') }
   } catch {
-    return ''
+    return { phone: '', address: '' }
   }
+}
+
+async function brandPhone(): Promise<string> {
+  return (await brandContact()).phone
 }
 
 /** Taomlar ro'yxati — mijozga ko'rinadigan ko'rinishda. */
@@ -329,6 +341,28 @@ const CUSTOMER_STATUS: Record<string, { title: string; note: string }> = {
   },
 }
 
+/**
+ * Olib ketish buyurtmasi uchun alohida matnlar.
+ *
+ * «Yetkazilmoqda» bu yerda eng muhim payt: taom tayyor va mijoz kelishi
+ * mumkin. Xabarga restoran manzili va telefoni qo'shiladi — mijoz
+ * qayerga borishini qidirib yurmasin.
+ */
+const PICKUP_STATUS: Record<string, { title: string; note: string }> = {
+  'Qabul qilindi': {
+    title: '✅ <b>Buyurtmangiz qabul qilindi!</b>',
+    note: 'Tayyorlashni boshladik. Tayyor bo‘lganda shu yerda xabar beramiz.',
+  },
+  Yetkazilmoqda: {
+    title: '🥡 <b>Buyurtmangiz tayyor!</b>',
+    note: 'Kelib olib ketishingiz mumkin. To‘lov joyida amalga oshiriladi.',
+  },
+  Yetkazildi: {
+    title: '🎉 <b>Buyurtmangiz topshirildi!</b>',
+    note: 'Yoqimli ishtaha! Taomlar yoqqan bo‘lsa, ilovada baho qoldiring — bu biz uchun juda muhim.',
+  },
+}
+
 /** Status o'zgarganda mijozga xabar (Telegram + ilova ichida). */
 export async function notifyCustomerStatus(order: OrderDoc, status: string) {
   const userId = Number(order.userId)
@@ -336,7 +370,8 @@ export async function notifyCustomerStatus(order: OrderDoc, status: string) {
 
   const id = displayId(order)
   const customer = order.customer || {}
-  const info = CUSTOMER_STATUS[status]
+  const pickup = isPickup(order)
+  const info = (pickup ? PICKUP_STATUS[status] : undefined) || CUSTOMER_STATUS[status]
   const cancelled = status === 'Bekor qilingan' || status === 'Rad etildi'
 
   const lines: string[] = []
@@ -364,7 +399,21 @@ export async function notifyCustomerStatus(order: OrderDoc, status: string) {
     }
   }
 
-  if ((status === 'Qabul qilindi' || status === 'Yetkazilmoqda') && customer.address) {
+  if (pickup) {
+    /*
+       Taom tayyor bo'lganda mijozga QAYERGA borishini aytamiz. Busiz u
+       manzilni qidirib, oxiri restoranga qo'ng'iroq qiladi — aynan
+       shuni kamaytirish uchun bu funksiya qilinmoqda.
+    */
+    if (status === 'Yetkazilmoqda' && !cancelled) {
+      const { phone, address } = await brandContact()
+      if (address || phone) {
+        lines.push('')
+        if (address) lines.push(`📍 <b>${escapeHtml(address)}</b>`)
+        if (phone) lines.push(`📞 ${escapeHtml(phone)}`)
+      }
+    }
+  } else if ((status === 'Qabul qilindi' || status === 'Yetkazilmoqda') && customer.address) {
     lines.push('')
     lines.push(`📍 ${escapeHtml(customer.address)}`)
   }

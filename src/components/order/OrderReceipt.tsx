@@ -207,7 +207,12 @@ export function OrderReceipt({ order, onClose }: Props) {
             </div>
           )}
 
-          {!!order.deliveryFee && (
+          {order.deliveryType === 'pickup' ? (
+            <div className="receipt-line">
+              <span>{t('checkout.pickup')}</span>
+              <span>{t('checkout.deliveryFree')}</span>
+            </div>
+          ) : !!order.deliveryFee && (
             <div className="receipt-line">
               <span>{t('checkout.delivery')}</span>
               <span>{formatPrice(order.deliveryFee)}</span>

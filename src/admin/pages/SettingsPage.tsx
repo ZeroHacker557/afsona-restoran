@@ -171,7 +171,7 @@ function HoursCard() {
 // ── Yetkazib berish ──────────────────────────────────────────
 
 function DeliveryCard() {
-  const { delivery } = useAdminData()
+  const { delivery, brand } = useAdminData()
   const [edited, setEdited] = useState<{ fee: string; freeFrom: string; minOrder: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -183,6 +183,20 @@ function DeliveryCard() {
   const setFee = (value: string) => setEdited({ ...form, fee: value })
   const setFreeFrom = (value: string) => setEdited({ ...form, freeFrom: value })
   const setMinOrder = (value: string) => setEdited({ ...form, minOrder: value })
+
+  /*
+     Kalit alohida saqlanadi — «Saqlash» tugmasini kutmaydi. Bu ataylab:
+     restoran band bo'lib qolganda olib ketishni bir bosishda o'chirib
+     qo'yishi kerak, narx maydonlariga tegmasdan.
+  */
+  async function togglePickup(value: boolean) {
+    try {
+      await saveSetting('delivery', { pickupEnabled: value })
+      toast(value ? 'Olib ketish yoqildi' : "Olib ketish o'chirildi")
+    } catch (error) {
+      toastError(error)
+    }
+  }
 
   async function save() {
     setBusy(true)
@@ -237,6 +251,23 @@ function DeliveryCard() {
           {busy ? <Spinner /> : <Save size={16} />}
           Saqlash
         </button>
+
+        <div className="border-t pt-4" style={{ borderColor: 'var(--line)' }}>
+          <Switch
+            checked={delivery.pickupEnabled === true}
+            onChange={togglePickup}
+            label="Olib ketish"
+            hint="Mijoz buyurtmani o'zi kelib olishi mumkin. Yetkazish narxi olinmaydi, minimal summa qo'llanmaydi, to'lov joyida naqd amalga oshiriladi."
+          />
+          {delivery.pickupEnabled === true && !brand.address.trim() && (
+            <div className="adm-note-danger mt-3">
+              <span>
+                Restoran manzili kiritilmagan — mijoz qayerga borishini bilmaydi.
+                Uni «Restoran» bo'limida to'ldiring.
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

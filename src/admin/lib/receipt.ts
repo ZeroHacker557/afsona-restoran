@@ -63,6 +63,7 @@ export function buildReceiptHtml(order: AdminOrder): string {
   const discount = Number(order.discount) || 0
   const delivery = Number(order.deliveryFee) || 0
   const containers = Number(order.containerFee) || 0
+  const pickup = order.deliveryType === 'pickup'
 
   const totals = [
     subtotal ? row('Mahsulotlar', num(subtotal)) : '',
@@ -74,6 +75,7 @@ export function buildReceiptHtml(order: AdminOrder): string {
       : '',
     containers ? row('Idishlar', num(containers)) : '',
     delivery ? row('Yetkazish', num(delivery)) : '',
+    pickup ? row('Olib ketish', 'mijoz o‘zi oladi') : '',
   ].join('')
 
   const payment = order.paymentMethod === 'Karta'
@@ -85,7 +87,11 @@ export function buildReceiptHtml(order: AdminOrder): string {
     [
       customer.name ? `<div class="line big">${escapeHtml(customer.name)}</div>` : '',
       customer.phone ? `<div class="line big">${escapeHtml(customer.phone)}</div>` : '',
-      customer.address ? `<div class="line">${escapeHtml(customer.address)}</div>` : '',
+      pickup
+        ? '<div class="line">Olib ketish — mijoz o‘zi oladi</div>'
+        : customer.address
+          ? `<div class="line">${escapeHtml(customer.address)}</div>`
+          : '',
     ].join(''),
   )
 

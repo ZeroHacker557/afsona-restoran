@@ -39,6 +39,14 @@ export type Category = {
   sortOrder?: number
 }
 
+/**
+ * Buyurtmani mijoz qanday oladi.
+ *
+ * Maydon yo'q (undefined) — yetkazib berish. Eski buyurtmalarda bu
+ * maydon bo'lmaydi, ular avvalgidek yetkazish bo'lib qolaveradi.
+ */
+export type DeliveryType = 'delivery' | 'pickup'
+
 export type OrderStatus = 'Yangi' | 'Qabul qilindi' | 'Yetkazilmoqda' | 'Yetkazildi' | 'Bekor qilingan' | 'Rad etildi'
 
 export type Order = {
@@ -55,6 +63,8 @@ export type Order = {
   discountPercent?: number
   promoCode?: string | null
   deliveryFee?: number
+  /** Yetkazib berishmi yoki mijoz o'zi olib ketadimi. */
+  deliveryType?: DeliveryType
   /**
    * Idishlar uchun jami summa. Chegirma bunga tushmaydi — bu qadoq
    * uchun haqiqiy xarajat.
@@ -87,12 +97,21 @@ export type DeliverySettings = {
   fee: number
   /** Shu summadan yuqori buyurtmalar bepul yetkaziladi. 0 — bepul yetkazish yo'q. */
   freeFrom: number
+  /**
+   * Mijoz buyurtmani o'zi kelib olib ketishi mumkinmi.
+   *
+   * O'chirilgan bo'lsa rasmiylashtirishda tanlov ko'rinmaydi va server
+   * ham bunday buyurtmani qabul qilmaydi.
+   */
+  pickupEnabled?: boolean
 }
 
 export type OrderForm = {
   name: string
   phone: string
+  /** Olib ketishda bo'sh bo'ladi — manzil so'ralmaydi. */
   address: string
+  deliveryType: DeliveryType
   location: { lat: number; lng: number } | null
   comment: string
   paymentMethod: 'Naqd' | 'Karta'

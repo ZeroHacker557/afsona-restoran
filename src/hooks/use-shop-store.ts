@@ -111,7 +111,8 @@ export function useShopStore() {
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isAuthenticated, setAuthenticated] = useState(false)
   const [orderForm, setOrderForm] = useState<OrderForm>({
-    name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd',
+    name: '', phone: '', address: '', deliveryType: 'delivery',
+    location: null, comment: '', paymentMethod: 'Naqd',
   })
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -395,7 +396,14 @@ export function useShopStore() {
   const submitOrder = useCallback(async () => {
     if (isSubmitting) return false
 
-    if (!orderForm.name.trim() || !orderForm.phone.trim() || !orderForm.address.trim()) {
+    // Olib ketishda manzil so'ralmaydi — server ham xuddi shunday
+    // tekshiradi (api/orders.ts).
+    const manzilKerak = orderForm.deliveryType !== 'pickup'
+    if (
+      !orderForm.name.trim() ||
+      !orderForm.phone.trim() ||
+      (manzilKerak && !orderForm.address.trim())
+    ) {
       notify(t('checkout.fillAll'))
       return false
     }
@@ -431,6 +439,7 @@ export function useShopStore() {
           location: orderForm.location,
           comment: orderForm.comment,
           paymentMethod: orderForm.paymentMethod,
+          deliveryType: orderForm.deliveryType,
         },
         promoCode: orderForm.promoCode,
       })
@@ -454,7 +463,12 @@ export function useShopStore() {
 
     orderKeyRef.current = null
     setCartItems({})
-    setOrderForm({ name: '', phone: '', address: '', location: null, comment: '', paymentMethod: 'Naqd' })
+    // Olish usuli saqlanadi: bir marta olib ketishni tanlagan mijoz
+    // ko'pincha keyingi safar ham shunday qiladi.
+    setOrderForm((previous) => ({
+      name: '', phone: '', address: '', deliveryType: previous.deliveryType,
+      location: null, comment: '', paymentMethod: 'Naqd',
+    }))
     setCheckoutDone(true)
     hapticSuccess()
     notify(t('checkout.success'))

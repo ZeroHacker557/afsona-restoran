@@ -17,6 +17,7 @@ import {
 import { db } from '../../lib/firebase'
 import { removeUploaded } from './upload'
 import { DEFAULT_HOURS, readHours, type WorkingHours } from '../../utils/hours'
+import { readDeliveryType, type DeliveryType } from '../../utils/delivery'
 
 /**
  * Panelning ma'lumotlar qatlami.
@@ -86,6 +87,8 @@ export type AdminOrder = {
   discountPercent?: number
   promoCode?: string | null
   deliveryFee?: number
+  /** 'pickup' — mijoz o'zi olib ketadi. Eski buyurtmalarda yo'q. */
+  deliveryType?: DeliveryType
   /** Idishlar uchun jami. Eski buyurtmalarda 0. */
   containerFee?: number
   userId?: number
@@ -397,6 +400,7 @@ function mapOrder(id: string, data: Record<string, unknown>): AdminOrder {
     discountPercent: num(data.discountPercent),
     promoCode: data.promoCode == null ? null : str(data.promoCode),
     deliveryFee: num(data.deliveryFee),
+    deliveryType: readDeliveryType(data.deliveryType),
     containerFee: num(data.containerFee),
     userId: num(data.userId),
     username: data.username == null ? null : str(data.username),
@@ -515,7 +519,13 @@ export function watchUsers(onData: (items: AdminUser[]) => void, onError?: (e: u
 
 // ── Sozlamalar ───────────────────────────────────────────────
 
-export type DeliverySettings = { fee: number; freeFrom: number; minOrder: number }
+export type DeliverySettings = {
+  fee: number
+  freeFrom: number
+  minOrder: number
+  /** Mijoz buyurtmani o'zi kelib olib ketishi mumkinmi. */
+  pickupEnabled: boolean
+}
 export type PaymentSettings = { cardNumber: string; cardOwner: string }
 export type BrandSettings = {
   name: string
@@ -541,6 +551,7 @@ export const readDelivery = (data?: Record<string, unknown>): DeliverySettings =
   fee: num(data?.fee),
   freeFrom: num(data?.freeFrom),
   minOrder: num(data?.minOrder),
+  pickupEnabled: data?.pickupEnabled === true,
 })
 
 export const readPayment = (data?: Record<string, unknown>): PaymentSettings => ({

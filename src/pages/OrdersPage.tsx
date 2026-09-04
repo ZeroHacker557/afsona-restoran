@@ -133,7 +133,18 @@ export function OrdersPage({
     return { color: 'var(--warning)', bg: 'var(--warning-soft)', needsAction: true, rejected: false }
   }
 
-  const translateStatus = (status: OrderStatus) => t(`status.${status}` as TranslationKey)
+  /*
+     Olib ketishda status boshqacha nomlanadi: «Yetkazilmoqda» —
+     «Tayyor», «Yetkazildi» — «Topshirildi». Bazadagi qiymat esa
+     o'zgarmaydi (`shared/delivery.ts` dagi izohga qarang).
+  */
+  const translateStatus = (order: Order) => {
+    const key =
+      order.deliveryType === 'pickup' ? `statusPickup.${order.status}` : `status.${order.status}`
+    const text = t(key as TranslationKey)
+    // Olib ketish uchun kalit yo'q bo'lsa — oddiy nomiga qaytamiz
+    return text === key ? t(`status.${order.status}` as TranslationKey) : text
+  }
 
   return (
     <>
@@ -188,7 +199,7 @@ export function OrdersPage({
                       className="text-[11px] font-bold uppercase tracking-wider"
                       style={{ color: statusColor(order.status) }}
                     >
-                      {translateStatus(order.status)}
+                      {translateStatus(order)}
                     </span>
                   </div>
                 </div>

@@ -13,6 +13,7 @@ import {
   Printer,
   Search,
   Send,
+  Store,
   Trash2,
   User,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ import { Modal } from '../components/Modal'
 import { Chip, ConfirmBar, Empty, RowsSkeleton, Spinner } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { formatDateTime, money, timeAgo } from '../lib/format'
+import { statusLabel } from '../../utils/delivery'
 import { buildReceiptHtml } from '../lib/receipt'
 import type { AdminOrder } from '../lib/db'
 import {
@@ -33,6 +35,13 @@ import {
 } from '../lib/status'
 import { useNow } from '../lib/now'
 
+/** Olish usuli bo'yicha filtr. */
+const WAYS = [
+  { id: 'all', label: 'Barchasi' },
+  { id: 'delivery', label: 'Yetkazish' },
+  { id: 'pickup', label: 'Olib ketish' },
+] as const
+
 const PERIODS = [
   { id: 'today', label: 'Bugun' },
   { id: '7', label: '7 kun' },
@@ -43,11 +52,12 @@ const PERIODS = [
 type Period = (typeof PERIODS)[number]['id']
 
 export function OrdersPage() {
-  const { orders, loaded, freshOrderIds, markOrdersSeen, ordersAtLimit, loadMoreOrders } =
+  const { orders, loaded, freshOrderIds, markOrdersSeen, ordersAtLimit, loadMoreOrders, delivery } =
     useAdminData()
   const [view, setView] = useState<'board' | 'list'>('board')
   const [period, setPeriod] = useState<Period>('today')
   const [status, setStatus] = useState<string>('all')
+  const [way, setWay] = useState<'all' | 'delivery' | 'pickup'>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<AdminOrder | null>(null)
 
@@ -132,6 +142,7 @@ export function OrdersPage() {
     return orders.filter((order) => {
       if (limit && (Date.parse(order.createdAt) || 0) < limit) return false
       if (status !== 'all' && order.status !== status) return false
+      if (way !== 'all' && (order.deliveryType || 'delivery') !== way) return false
       if (!needle) return true
       return (
         order.orderNumber.toLowerCase().includes(needle) ||
@@ -140,7 +151,7 @@ export function OrdersPage() {
         (order.customer?.address || '').toLowerCase().includes(needle)
       )
     })
-  }, [orders, period, status, search, now])
+  }, [orders, period, status, way, search, now])
 
   // Panel ochilgach yangi buyurtma belgisini o'chiramiz
   const fresh = new Set(freshOrderIds)
@@ -171,6 +182,21 @@ export function OrdersPage() {
             {item.label}
           </button>
         ))}
+
+        {/* Olish usuli — faqat olib ketish yoqilgan bo'lsa ko'rinadi */}
+        {delivery.pickupEnabled === true && (
+          <div className="flex gap-1">
+            {WAYS.map((item) => (
+              <button
+                key={item.id}
+                className={`adm-tab ${way === item.id ? 'active' : ''}`}
+                onClick={() => setWay(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-1 rounded-[var(--r-sm)] p-1" style={{ background: 'var(--surface-3)' }}>
           <button
@@ -301,6 +327,7 @@ export function OrdersPage() {
                     <div className="truncate text-xs" style={{ color: 'var(--muted)' }}>
                       {order.products.length} ta taom · {order.customer?.phone || ''}
                     </div>
+                    {order.deliveryType === 'pickup' && <PickupTag />}
                     <div className="mt-2 flex items-center justify-between">
                       <span className="font-bold">{money(order.total)}</span>
                       <span
@@ -353,6 +380,7 @@ export function OrdersPage() {
                       <div className="text-xs" style={{ color: 'var(--muted)' }}>
                         {order.customer?.phone}
                       </div>
+                      {order.deliveryType === 'pickup' && <PickupTag />}
                     </td>
                     <td style={{ color: 'var(--muted)' }}>{order.products.length} ta</td>
                     <td className="font-bold">{money(order.total)}</td>
@@ -366,7 +394,7 @@ export function OrdersPage() {
                     </td>
                     <td>
                       <Chip color={style.color} background={style.background}>
-                        {order.status}
+                        {statusLabel(order.status, order.deliveryType || 'delivery')}
                       </Chip>
                     </td>
                     <td style={{ color: 'var(--muted)' }}>{formatDateTime(order.createdAt)}</td>
@@ -484,6 +512,7 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
   }
 
   const style = STATUS_STYLE[order.status] || STATUS_STYLE.Yangi
+  const pickup = order.deliveryType === 'pickup'
   const location = order.customer?.location
 
   return (
@@ -515,8 +544,9 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
 
       <div className="flex flex-wrap items-center gap-2">
         <Chip color={style.color} background={style.background}>
-          {order.status}
+          {statusLabel(order.status, order.deliveryType || 'delivery')}
         </Chip>
+        {order.deliveryType === 'pickup' && <PickupTag />}
         <span className="text-sm" style={{ color: 'var(--muted)' }}>
           {formatDateTime(order.createdAt)}
         </span>
@@ -545,7 +575,7 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
               disabled={!!busy || item === order.status}
             >
               {busy === item ? <Spinner /> : null}
-              {item}
+              {statusLabel(item, order.deliveryType || 'delivery')}
             </button>
           ))}
         </div>
@@ -649,15 +679,17 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
 
         <div className="adm-card adm-card-pad">
           <div className="mb-2 flex items-center gap-2 text-sm font-bold">
-            <MapPin size={15} /> Manzil
+            {pickup ? <><Store size={15} /> Olib ketish</> : <><MapPin size={15} /> Manzil</>}
           </div>
-          <div className="text-sm">{order.customer?.address || '—'}</div>
+          <div className="text-sm">
+            {pickup ? 'Mijoz buyurtmani o‘zi olib ketadi — yetkazish yo‘q' : order.customer?.address || '—'}
+          </div>
           {order.customer?.comment && (
             <div className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>
               Izoh: {order.customer.comment}
             </div>
           )}
-          {location && (
+          {location && !pickup && (
             <div className="mt-2 flex flex-wrap gap-2">
               <button className="adm-btn sm" onClick={shareLocation} disabled={busy === 'location'}>
                 {busy === 'location' ? <Spinner /> : <Send size={14} />}
@@ -716,7 +748,10 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
             />
           )}
           {!!order.containerFee && <Row label="Idishlar" value={money(order.containerFee)} />}
-          <Row label="Yetkazish" value={order.deliveryFee ? money(order.deliveryFee) : 'Bepul'} />
+          <Row
+            label={pickup ? 'Olib ketish' : 'Yetkazish'}
+            value={order.deliveryFee ? money(order.deliveryFee) : 'Bepul'}
+          />
           <div className="mt-1 flex justify-between border-t pt-2 text-base font-extrabold" style={{ borderColor: 'var(--line-soft)' }}>
             <span>Jami</span>
             <span>{money(order.total)}</span>
@@ -793,4 +828,22 @@ function printOrder(order: AdminOrder) {
   }
   win.document.write(buildReceiptHtml(order))
   win.document.close()
+}
+
+/**
+ * «Olib ketish» belgisi.
+ *
+ * Faqat olib ketish buyurtmalarida chiqadi — ular ozchilik. Yetkazish
+ * buyurtmalariga ham belgi qo'yilsa, doskadagi har bir kartochka
+ * shovqinga to'lib ketardi.
+ */
+function PickupTag() {
+  return (
+    <span
+      className="mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold"
+      style={{ background: 'var(--info-soft)', color: 'var(--info)' }}
+    >
+      <Store size={11} /> Olib ketish
+    </span>
+  )
 }

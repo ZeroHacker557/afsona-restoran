@@ -4,6 +4,7 @@ import { fail, requirePost } from './_lib/http.js'
 import { getOpenState, readHours } from './_lib/hours.js'
 import { checkPromo, usedInLegacyArray, USES } from './_lib/promo.js'
 import { containerTotal, orderTotal } from './_lib/pricing.js'
+import { readDeliveryType, type DeliveryType } from './_lib/delivery.js'
 
 const ORDER_NUMBER_START = 1000
 
@@ -21,6 +22,7 @@ type IncomingOrder = {
     location: { lat: number; lng: number } | null
     comment: string
     paymentMethod: 'Naqd' | 'Karta'
+    deliveryType?: DeliveryType
   }
   promoCode?: string
   /** Takroriy buyurtmani to'sish uchun mijoz yaratadigan noyob kalit. */
@@ -40,9 +42,25 @@ function readOrder(body: unknown): IncomingOrder {
   const name = String(customer.name || '').trim()
   const phone = String(customer.phone || '').trim()
   const address = String(customer.address || '').trim()
-  if (!name || !phone || !address) throw new Error("Ism, telefon va manzil to'ldirilishi shart")
+  const deliveryType = readDeliveryType(customer.deliveryType)
 
-  const paymentMethod = customer.paymentMethod === 'Karta' ? 'Karta' : 'Naqd'
+  /*
+     Olib ketishda manzil so'ralmaydi — mijoz o'zi keladi. Ism va
+     telefon esa baribir kerak: taom tayyor bo'lganda bog'lanish va
+     kelganda buyurtmani tanib olish uchun.
+  */
+  if (!name || !phone) throw new Error("Ism va telefon to'ldirilishi shart")
+  if (deliveryType === 'delivery' && !address) {
+    throw new Error("Yetkazish manzilini kiriting")
+  }
+
+  /*
+     Olib ketishda to'lov faqat naqd va faqat kelganda. Karta o'tkazmasi
+     bu yerda ishlamaydi: mijoz kelmay qolsa pulni qaytarish muammosi
+     tug'iladi, restoran esa tayyorlangan taom bilan qoladi.
+  */
+  const paymentMethod =
+    deliveryType === 'pickup' ? 'Naqd' : customer.paymentMethod === 'Karta' ? 'Karta' : 'Naqd'
 
   return {
     items: items.map((item) => {
@@ -56,12 +74,16 @@ function readOrder(body: unknown): IncomingOrder {
       name: name.slice(0, 120),
       phone: phone.slice(0, 40),
       address: address.slice(0, 300),
+      // Olib ketishda xarita nuqtasi ma'nosiz — kuryer bormaydi
       location:
-        customer.location && typeof customer.location.lat === 'number'
+        deliveryType === 'delivery' &&
+        customer.location &&
+        typeof customer.location.lat === 'number'
           ? { lat: customer.location.lat, lng: customer.location.lng }
           : null,
       comment: String(customer.comment || '').slice(0, 500),
       paymentMethod,
+      deliveryType,
     },
     promoCode: b?.promoCode ? String(b.promoCode).trim().toUpperCase().slice(0, 40) : undefined,
     clientOrderId: b?.clientOrderId ? String(b.clientOrderId).slice(0, 64) : undefined,
@@ -257,6 +279,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const subtotal = products.reduce((sum, p) => sum + p.product.price * p.quantity, 0)
 
+      const pickup = order.customer.deliveryType === 'pickup'
+
+      /*
+         Olib ketish o'chirib qo'yilgan bo'lsa, bunday buyurtmani qabul
+         qilmaymiz. Bu mijozning eski ochiq sahifasi uchun: u yerda
+         tanlov hali ko'rinib turgan bo'lishi mumkin.
+      */
+      if (pickup && deliverySnap.data()?.pickupEnabled !== true) {
+        throw new Error('PICKUP_DISABLED')
+      }
+
       /*
          Idishlar summasi alohida turadi va CHEGIRMAGA TUSHMAYDI:
          qadoq — restoran uchun haqiqiy xarajat, promokod taomga
@@ -266,9 +299,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       */
       const containerFee = containerTotal(products)
 
-      // Minimal buyurtma summasi (settings/delivery.minOrder)
+      /*
+         Minimal buyurtma summasi faqat yetkazishga tegishli: u kuryer
+         yo'lga chiqishi arziydigan qilish uchun qo'yilgan. Mijoz o'zi
+         kelsa bu xarajat yo'q, shuning uchun cheklov ham qo'llanmaydi.
+      */
       const minOrder = Math.max(Number(deliverySnap.data()?.minOrder) || 0, 0)
-      if (minOrder > 0 && subtotal < minOrder) throw new Error(`MIN_ORDER:${minOrder}`)
+      if (!pickup && minOrder > 0 && subtotal < minOrder) {
+        throw new Error(`MIN_ORDER:${minOrder}`)
+      }
 
       // ── 3. Promokod ────────────────────────────────────────
       let discountPercent = 0
@@ -294,7 +333,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const delivery = deliverySnap.exists ? deliverySnap.data() : null
       const deliveryFee = Math.max(Number(delivery?.fee) || 0, 0)
       const freeFrom = Math.max(Number(delivery?.freeFrom) || 0, 0)
-      const appliedDelivery = freeFrom > 0 && discountedSubtotal >= freeFrom ? 0 : deliveryFee
+      // Olib ketishda yetkazish narxi yo'q — mijoz o'zi keladi
+      const appliedDelivery = pickup
+        ? 0
+        : freeFrom > 0 && discountedSubtotal >= freeFrom
+          ? 0
+          : deliveryFee
 
       const total = orderTotal({ subtotal, discount, containerFee, deliveryFee: appliedDelivery })
 
@@ -339,6 +383,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         discountPercent,
         promoCode: appliedPromo,
         deliveryFee: appliedDelivery,
+        deliveryType: order.customer.deliveryType,
         containerFee,
         total,
         status: 'Yangi',
@@ -391,6 +436,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       NOT_ENOUGH_STOCK: 'Omborda yetarli miqdor yo‘q, savatdagi sonni kamaytiring',
       PRODUCT_UNAVAILABLE: 'Savatdagi taomlardan biri hozircha mavjud emas',
       PROMO_FIRST_ONLY: 'Bu promokod faqat birinchi buyurtma uchun',
+      PICKUP_DISABLED: 'Olib ketish hozircha ishlamayapti — yetkazib berishni tanlang',
     }
     if (messages[code]) return fail(res, 400, messages[code])
 
