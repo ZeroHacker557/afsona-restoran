@@ -72,7 +72,12 @@ export function OrdersPage() {
      umuman ko'rinmaydi va hamma narsa 'delivery' da qoladi — ya'ni
      panel ilgarigidek bitta doska bo'lib ishlaydi.
   */
-  const [board, setBoard] = useState<BoardId>('all')
+  /*
+     Panel ochilganda «Yetkazish» turadi — kundalik ish shu yerda.
+     «Jami» ataylab sukut emas: u umumiy holatni ko'rish uchun, alohida
+     bosib kiriladigan ko'rinish.
+  */
+  const [board, setBoard] = useState<BoardId>('delivery')
 
   /** Olib ketish o'chirilgan bo'lsa panel ilgarigidek bitta doska. */
   const twoBoards = delivery.pickupEnabled === true
