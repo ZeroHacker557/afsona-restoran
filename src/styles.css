@@ -549,6 +549,19 @@ a { color: inherit; text-decoration: none; }
   text-decoration: line-through;
 }
 
+/*
+   "Idish bilan +3 000 so'm" — narx tagidagi kichik yozuv.
+   Ataylab jimgina: bu qo'shimcha ma'lumot, taomning o'z narxi bilan
+   raqobatlashmasligi kerak. Uzun bo'lsa ikkinchi satrga tushadi.
+*/
+.product-card-container {
+  margin: 3px 0 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
 /* ====== Buttons ====== */
 .add-button {
   display: grid;

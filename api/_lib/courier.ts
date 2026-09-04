@@ -96,7 +96,9 @@ function itemLines(order: OrderDoc): string[] {
   const lines = items.slice(0, 30).map((item) => {
     const name = item?.product?.name || 'Taom'
     const qty = Number(item?.quantity) || 1
-    return `  • ${escapeHtml(name)} × ${qty}`
+    // 🥡 — idish bilan beriladigan taom
+    const idish = Number(item?.product?.containerPrice) > 0 ? ' 🥡' : ''
+    return `  • ${escapeHtml(name)} × ${qty}${idish}`
   })
   if (items.length > 30) lines.push(`  … va yana ${items.length - 30} ta`)
   return lines

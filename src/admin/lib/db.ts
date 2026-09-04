@@ -47,6 +47,8 @@ export type AdminProduct = {
   rating?: number
   reviews?: number
   sortOrder?: number
+  /** Idish narxi, so'm. null yoki 0 — taom idishsiz beriladi. */
+  containerPrice?: number | null
 }
 
 export type AdminCategory = {
@@ -84,6 +86,8 @@ export type AdminOrder = {
   discountPercent?: number
   promoCode?: string | null
   deliveryFee?: number
+  /** Idishlar uchun jami. Eski buyurtmalarda 0. */
+  containerFee?: number
   userId?: number
   username?: string | null
   /** Buyurtmani olgan kuryer (Telegram tugmasi orqali). */
@@ -94,7 +98,14 @@ export type AdminOrder = {
   /** Bekor qilish/rad etish sababi. */
   cancelReason?: string | null
   products: {
-    product: { id: number | string; name: string; price: number; images?: string[] }
+    product: {
+      id: number | string
+      name: string
+      price: number
+      images?: string[]
+      /** Buyurtma paytidagi idish narxi — keyin o'zgarsa ham chek o'zgarmaydi. */
+      containerPrice?: number
+    }
     quantity: number
   }[]
   customer: {
@@ -170,6 +181,7 @@ export function watchProducts(onData: (items: AdminProduct[]) => void, onError?:
       rating: num(data.rating, 5),
       reviews: num(data.reviews),
       sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : undefined,
+      containerPrice: num(data.containerPrice) > 0 ? num(data.containerPrice) : null,
     }),
     // Avval qo'lda belgilangan tartib (sudrab qo'yilgan), keyin nom bo'yicha.
     // sortOrder yo'q taomlar oxirida turadi — ular hali tartiblanmagan.
@@ -208,6 +220,7 @@ export async function createProduct(input: Omit<AdminProduct, 'id'>): Promise<st
     discount: input.discount ?? '',
     stock: input.stock ?? 0,
     available: input.available !== false,
+    containerPrice: input.containerPrice ?? null,
     rating: 5,
     reviews: 0,
   })
@@ -384,6 +397,7 @@ function mapOrder(id: string, data: Record<string, unknown>): AdminOrder {
     discountPercent: num(data.discountPercent),
     promoCode: data.promoCode == null ? null : str(data.promoCode),
     deliveryFee: num(data.deliveryFee),
+    containerFee: num(data.containerFee),
     userId: num(data.userId),
     username: data.username == null ? null : str(data.username),
     courierId: data.courierId == null ? null : num(data.courierId),

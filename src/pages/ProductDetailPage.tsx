@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, Heart, Minus, MessageSquare, Plus, ShoppingCart, Star, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Heart, Minus, MessageSquare, Package, Plus, ShoppingCart, Star, Truck, UserRound } from 'lucide-react'
 import { formatPrice } from '../data'
 import { getImageUrl, hapticSuccess, getTelegramUser, showAlert } from '../utils/telegram'
 import { formatDate } from '../utils/date'
@@ -176,6 +176,16 @@ export function ProductDetailPage({
           <strong className="text-3xl" style={{ color: 'var(--ink)' }}>{formatPrice(product.price)}</strong>
           {product.oldPrice && <del style={{ color: 'var(--faint)' }}>{formatPrice(product.oldPrice)}</del>}
         </div>
+
+        {!!product.containerPrice && (
+          <p
+            className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold"
+            style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}
+          >
+            <Package size={16} />
+            {t('product.containerNote', { price: formatPrice(product.containerPrice) })}
+          </p>
+        )}
 
         {soldOut && (
           <p

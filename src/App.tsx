@@ -87,6 +87,7 @@ function App() {
           <CartDrawer
             cartProducts={shop.cartProducts}
             cartTotal={shop.cartTotal}
+            cartContainerTotal={shop.cartContainerTotal}
             onClose={shop.closeCart}
             onUpdateQuantity={shop.updateCartQuantity}
             onCheckout={shop.goToCheckout}
@@ -208,6 +209,7 @@ function App() {
               profile={shop.userProfile}
               cartProducts={shop.cartProducts}
               cartTotal={shop.cartTotal}
+              cartContainerTotal={shop.cartContainerTotal}
               orderForm={shop.orderForm}
               onUpdateForm={shop.updateOrderForm}
               onSubmit={shop.submitOrder}

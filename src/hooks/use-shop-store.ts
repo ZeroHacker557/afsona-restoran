@@ -4,6 +4,7 @@ import { ensureSignedIn, onAuthChanged, auth } from '../lib/auth'
 import { apiPost, ApiError } from '../lib/api'
 import { track } from '../lib/track'
 import { searchProducts } from '../utils/search'
+import { containerTotal } from '../utils/pricing'
 import type { AppPage, Category, Order, OrderForm, Product, UserProfile, Notification } from '../types/domain'
 import { hapticError, hapticFeedback, hapticSuccess, initTelegram } from '../utils/telegram'
 import { applyTheme, getStoredTheme, storeTheme, type ThemeMode } from '../utils/theme'
@@ -235,6 +236,14 @@ export function useShopStore() {
       })
       .filter(Boolean) as { product: Product; quantity: number; cartKey: string }[]
   }, [cartItems, products])
+
+  /*
+     Idishlar summasi taom summasidan alohida turadi — chegirma unga
+     tushmaydi va bepul yetkazish chegarasiga qo'shilmaydi. Formula
+     server bilan bitta faylda (`shared/pricing.ts`), shuning uchun
+     mijoz ko'rgan summa chekdagi summaga teng chiqadi.
+  */
+  const cartContainerTotal = useMemo(() => containerTotal(cartProducts), [cartProducts])
 
   const searchResults = useMemo(
     () => searchProducts(products, query),
@@ -480,7 +489,7 @@ export function useShopStore() {
   return {
     page, history, canGoBack: history.length > 0 || isCartOpen || isSearchOpen,
     products, categories, loading,
-    cartItems, cartCount, cartTotal, cartProducts,
+    cartItems, cartCount, cartTotal, cartContainerTotal, cartProducts,
     likedIds, selectedProduct,
     isSearchOpen, isCartOpen, query, searchResults, toast,
     myOrders, ordersLoaded, checkoutDone, closeCheckoutSuccess, isSubmitting, authReady, isAuthenticated, orderForm, userProfile,

@@ -60,6 +60,8 @@ export function subscribeToProducts(callback: (products: Product[]) => void, onE
         available: data.available !== false,
         // Admin panelda sudrab belgilangan tartib
         sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : undefined,
+        // Idish narxi — 0 va bo'sh qiymat "idishsiz" degani
+        containerPrice: Number(data.containerPrice) > 0 ? Number(data.containerPrice) : undefined,
       }
     })
     // Firestore hujjatlarni id bo'yicha qaytaradi — bu tasodifiy tartib.

@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from './_lib/firebase-admin.js'
 import { fail, requirePost } from './_lib/http.js'
 import { getOpenState, readHours } from './_lib/hours.js'
 import { checkPromo, usedInLegacyArray, USES } from './_lib/promo.js'
+import { containerTotal, orderTotal } from './_lib/pricing.js'
 
 const ORDER_NUMBER_START = 1000
 
@@ -231,6 +232,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           stockUpdates.push({ ref: snap.ref, stock: data.stock - requested })
         }
 
+        /*
+           Idish narxi ham serverdan olinadi — mijoz yuborgan qiymatga
+           ishonmaymiz. 0 va manfiy qiymat "idishsiz" degani.
+        */
+        const rawContainer = Number(data.containerPrice)
+        const containerPrice =
+          Number.isFinite(rawContainer) && rawContainer > 0 ? Math.round(rawContainer) : 0
+
         return {
           product: {
             id: Number(data.id ?? snap.id),
@@ -238,12 +247,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             price,
             images: Array.isArray(data.images) ? data.images : [],
             category: String(data.category || ''),
+            // Buyurtma paytidagi idish narxi yozib qo'yiladi — keyin
+            // admin narxni o'zgartirsa ham eski chek o'zgarmaydi.
+            ...(containerPrice > 0 ? { containerPrice } : {}),
           },
           quantity: item.quantity,
         }
       })
 
       const subtotal = products.reduce((sum, p) => sum + p.product.price * p.quantity, 0)
+
+      /*
+         Idishlar summasi alohida turadi va CHEGIRMAGA TUSHMAYDI:
+         qadoq — restoran uchun haqiqiy xarajat, promokod taomga
+         beriladi. Shuningdek u minimal buyurtma va bepul yetkazish
+         chegarasiga ham qo'shilmaydi — ular faqat taom summasidan
+         hisoblanadi.
+      */
+      const containerFee = containerTotal(products)
 
       // Minimal buyurtma summasi (settings/delivery.minOrder)
       const minOrder = Math.max(Number(deliverySnap.data()?.minOrder) || 0, 0)
@@ -275,7 +296,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const freeFrom = Math.max(Number(delivery?.freeFrom) || 0, 0)
       const appliedDelivery = freeFrom > 0 && discountedSubtotal >= freeFrom ? 0 : deliveryFee
 
-      const total = discountedSubtotal + appliedDelivery
+      const total = orderTotal({ subtotal, discount, containerFee, deliveryFee: appliedDelivery })
 
       // ── 5. Yozishlar ───────────────────────────────────────
       const currentCounter = counterSnap.exists
@@ -318,6 +339,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         discountPercent,
         promoCode: appliedPromo,
         deliveryFee: appliedDelivery,
+        containerFee,
         total,
         status: 'Yangi',
         paymentMethod: order.customer.paymentMethod,

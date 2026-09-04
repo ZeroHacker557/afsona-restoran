@@ -62,6 +62,7 @@ export function buildReceiptHtml(order: AdminOrder): string {
   const subtotal = Number(order.subtotal) || 0
   const discount = Number(order.discount) || 0
   const delivery = Number(order.deliveryFee) || 0
+  const containers = Number(order.containerFee) || 0
 
   const totals = [
     subtotal ? row('Mahsulotlar', num(subtotal)) : '',
@@ -71,6 +72,7 @@ export function buildReceiptHtml(order: AdminOrder): string {
           `−${num(discount)}`,
         )
       : '',
+    containers ? row('Idishlar', num(containers)) : '',
     delivery ? row('Yetkazish', num(delivery)) : '',
   ].join('')
 

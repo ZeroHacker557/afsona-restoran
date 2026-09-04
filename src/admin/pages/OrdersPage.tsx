@@ -715,6 +715,7 @@ function OrderModal({ order, onClose }: { order: AdminOrder; onClose: () => void
               tone="var(--success)"
             />
           )}
+          {!!order.containerFee && <Row label="Idishlar" value={money(order.containerFee)} />}
           <Row label="Yetkazish" value={order.deliveryFee ? money(order.deliveryFee) : 'Bepul'} />
           <div className="mt-1 flex justify-between border-t pt-2 text-base font-extrabold" style={{ borderColor: 'var(--line-soft)' }}>
             <span>Jami</span>

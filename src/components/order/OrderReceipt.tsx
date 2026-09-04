@@ -94,6 +94,18 @@ export function OrderReceipt({ order, onClose }: Props) {
     order.subtotal ??
     order.products.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
 
+  /*
+     Eski buyurtmalarda `containerFee` yo'q — ular idish tushunchasi
+     paydo bo'lishidan oldin berilgan. Shunda satr umuman chiqmaydi va
+     chek avvalgidek ko'rinadi.
+  */
+  const containerFee =
+    order.containerFee ??
+    order.products.reduce(
+      (sum, item) => sum + (item.product.containerPrice || 0) * item.quantity,
+      0,
+    )
+
   return createPortal(
     <div className="receipt-overlay" role="dialog" aria-modal="true" ref={overlayRef}>
       <button className="receipt-close" onClick={onClose} aria-label={t('common.close')}>
@@ -187,6 +199,13 @@ export function OrderReceipt({ order, onClose }: Props) {
             <span>{t('checkout.products')}</span>
             <span>{formatPrice(subtotal)}</span>
           </div>
+
+          {containerFee > 0 && (
+            <div className="receipt-line">
+              <span>{t('receipt.containers')}</span>
+              <span>{formatPrice(containerFee)}</span>
+            </div>
+          )}
 
           {!!order.deliveryFee && (
             <div className="receipt-line">

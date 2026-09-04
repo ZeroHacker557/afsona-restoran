@@ -20,6 +20,14 @@ export type Product = {
   available?: boolean
   /** Admin panelda sudrab belgilangan tartib. Kichik son — yuqorida. */
   sortOrder?: number
+  /**
+   * Idish narxi — bir porsiya uchun, so'mda.
+   *
+   * Bo'sh (undefined yoki 0) — taom idishsiz beriladi va mijozga hech
+   * narsa ko'rsatilmaydi. Qiymat bo'lsa — taom idish bilan beriladi va
+   * shu summa har bir porsiya uchun qo'shiladi.
+   */
+  containerPrice?: number
 }
 
 export type Category = {
@@ -47,7 +55,12 @@ export type Order = {
   discountPercent?: number
   promoCode?: string | null
   deliveryFee?: number
-  /** Yakuniy summa: subtotal - discount + deliveryFee. */
+  /**
+   * Idishlar uchun jami summa. Chegirma bunga tushmaydi — bu qadoq
+   * uchun haqiqiy xarajat.
+   */
+  containerFee?: number
+  /** Yakuniy summa: subtotal - discount + containerFee + deliveryFee. */
   total: number
   status: OrderStatus
   paymentMethod?: 'Naqd' | 'Karta'

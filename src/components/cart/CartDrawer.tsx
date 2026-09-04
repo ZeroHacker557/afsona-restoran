@@ -7,6 +7,8 @@ import type { Product } from '../../types/domain'
 type Props = {
   cartProducts: { product: Product; quantity: number; size?: string; color?: string; cartKey: string }[]
   cartTotal: number
+  /** Idishlar uchun jami. 0 bo'lsa savatda idish satri ko'rsatilmaydi. */
+  cartContainerTotal: number
   onClose: () => void
   onUpdateQuantity: (cartKey: string, quantity: number) => void
   onCheckout: () => void
@@ -16,6 +18,7 @@ type Props = {
 export function CartDrawer({
   cartProducts,
   cartTotal,
+  cartContainerTotal,
   onClose,
   onUpdateQuantity,
   onCheckout,
@@ -95,6 +98,11 @@ export function CartDrawer({
                     <p className="mt-1 text-sm font-extrabold" style={{ color: 'var(--ink)' }}>
                       {formatPrice(product.price)}
                     </p>
+                    {!!product.containerPrice && (
+                      <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                        {t('product.withContainer')} +{formatPrice(product.containerPrice)}
+                      </p>
+                    )}
 
                     <div className="mt-3 flex items-center justify-between">
                       <div
@@ -136,9 +144,15 @@ export function CartDrawer({
             </div>
 
             <footer className="border-t p-5" style={{ borderColor: 'var(--line)' }}>
+              {cartContainerTotal > 0 && (
+                <div className="mb-2 flex justify-between text-sm">
+                  <span style={{ color: 'var(--muted)' }}>{t('cart.containers')}</span>
+                  <b style={{ color: 'var(--muted)' }}>{formatPrice(cartContainerTotal)}</b>
+                </div>
+              )}
               <div className="mb-4 flex justify-between text-lg">
                 <span className="font-bold" style={{ color: 'var(--ink)' }}>{t('cart.total')}</span>
-                <b style={{ color: 'var(--ink)' }}>{formatPrice(cartTotal)}</b>
+                <b style={{ color: 'var(--ink)' }}>{formatPrice(cartTotal + cartContainerTotal)}</b>
               </div>
               <button onClick={onCheckout} className="btn-primary w-full py-4">
                 <ShoppingBag size={20} /> {t('cart.checkout')}

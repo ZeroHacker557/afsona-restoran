@@ -15,6 +15,8 @@ export type OrderDoc = {
   total?: number
   discount?: number
   deliveryFee?: number
+  /** Idishlar uchun jami. Eski buyurtmalarda yo'q. */
+  containerFee?: number
   paymentMethod?: string
   paymentStatus?: string
   status?: string
@@ -26,7 +28,7 @@ export type OrderDoc = {
   /** Kuryerlarga yuborilgan xabarlar — keyin tahrirlash uchun. */
   courierMsgs?: { chatId: number; messageId: number }[]
   products?: {
-    product?: { name?: string; price?: number }
+    product?: { name?: string; price?: number; containerPrice?: number }
     quantity?: number
   }[]
   customer?: {
@@ -222,7 +224,9 @@ export function locationCaption(order: OrderDoc): string {
     for (const item of items.slice(0, 30)) {
       const name = item?.product?.name || 'Taom'
       const qty = Number(item?.quantity) || 1
-      lines.push(`  • ${escapeHtml(name)} × ${qty}`)
+      // 🥡 — oshxona va kuryer idish kerakligini bir qarashda ko'rsin
+      const idish = Number(item?.product?.containerPrice) > 0 ? ' 🥡' : ''
+      lines.push(`  • ${escapeHtml(name)} × ${qty}${idish}`)
     }
     if (items.length > 30) lines.push(`  … va yana ${items.length - 30} ta`)
   }
@@ -288,7 +292,8 @@ function customerItems(order: OrderDoc): string[] {
     const name = item?.product?.name || 'Taom'
     const qty = Number(item?.quantity) || 1
     const price = Number(item?.product?.price) || 0
-    lines.push(`  • ${escapeHtml(name)} × ${qty} — ${money(price * qty)}`)
+    const idish = Number(item?.product?.containerPrice) > 0 ? ' 🥡' : ''
+    lines.push(`  • ${escapeHtml(name)} × ${qty}${idish} — ${money(price * qty)}`)
   }
   if (items.length > 20) lines.push(`  … va yana ${items.length - 20} ta`)
   return lines
@@ -349,6 +354,9 @@ export async function notifyCustomerStatus(order: OrderDoc, status: string) {
 
   if (!cancelled) {
     lines.push('')
+    if (Number(order.containerFee) > 0) {
+      lines.push(`🥡 Idishlar: ${money(Number(order.containerFee))}`)
+    }
     lines.push(`💰 <b>Jami: ${money(order.total)}</b>`)
     if (order.paymentMethod) {
       const paid = order.paymentMethod === 'Karta' && order.paymentStatus === 'Tolangan'

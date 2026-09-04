@@ -290,6 +290,11 @@ export function ProductsPage() {
                         {money(product.oldPrice)}
                       </span>
                     )}
+                    {!!product.containerPrice && (
+                      <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                        + idish {money(product.containerPrice)}
+                      </span>
+                    )}
                   </span>
                 </button>
 
@@ -340,6 +345,7 @@ type FormState = {
   description: string
   discount: string
   stock: string
+  containerPrice: string
   available: boolean
   images: string[]
 }
@@ -356,6 +362,7 @@ function ProductModal({ product, onClose }: { product: AdminProduct | null; onCl
     description: product?.description || '',
     discount: product?.discount || '',
     stock: product?.stock == null ? '' : String(product.stock),
+    containerPrice: product?.containerPrice ? String(product.containerPrice) : '',
     available: product ? product.available !== false : true,
     images: product?.images || [],
   })
@@ -410,6 +417,9 @@ function ProductModal({ product, onClose }: { product: AdminProduct | null; onCl
         description: form.description.trim(),
         discount: form.discount.trim(),
         stock: form.stock === '' ? null : Math.max(Math.round(Number(form.stock)), 0),
+        // Bo'sh yoki 0 — idishsiz. null yozamiz, "0 so'mlik idish" degan
+        // holat bo'lmasin: mijozga ham hech narsa ko'rsatilmaydi.
+        containerPrice: Number(form.containerPrice) > 0 ? Math.round(Number(form.containerPrice)) : null,
         available: form.available,
         images: form.images,
       }
@@ -601,7 +611,27 @@ function ProductModal({ product, onClose }: { product: AdminProduct | null; onCl
             onChange={(event) => set('stock', event.target.value.replace(/\D/g, ''))}
           />
         </Field>
+
+        <Field
+          label="Idish narxi (so'm)"
+          hint="Bo'sh qoldirilsa taom idishsiz beriladi va mijozga hech narsa ko'rsatilmaydi"
+        >
+          <input
+            className="adm-input"
+            inputMode="numeric"
+            value={form.containerPrice}
+            onChange={(event) => set('containerPrice', event.target.value.replace(/\D/g, ''))}
+            placeholder="3000"
+          />
+        </Field>
       </div>
+
+      {Number(form.containerPrice) > 0 && (
+        <p className="adm-hint" style={{ marginTop: -4 }}>
+          Mijoz «Idish bilan · +{money(Number(form.containerPrice))}» yozuvini ko'radi. Har bir
+          porsiya uchun shu summa qo'shiladi va chekda alohida satr bo'lib chiqadi.
+        </p>
+      )}
 
       <Field label="Tavsif">
         <textarea

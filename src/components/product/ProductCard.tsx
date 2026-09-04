@@ -80,6 +80,11 @@ export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLi
           {product.oldPrice && !compact && (
             <p className="product-card-old-price">{formatPrice(product.oldPrice)}</p>
           )}
+          {!!product.containerPrice && (
+            <p className="product-card-container">
+              {t('product.withContainer')} +{formatPrice(product.containerPrice)}
+            </p>
+          )}
         </div>
         <button
           className="add-button"

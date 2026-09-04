@@ -9,6 +9,7 @@ import { getImageUrl, hapticFeedback } from '../utils/telegram'
 import { getPaymentSettings, getDeliverySettings } from '../lib/firebase'
 import { apiPost, ApiError } from '../lib/api'
 import { useT } from '../i18n'
+import { orderTotal } from '../utils/pricing'
 import type { AppPage, DeliverySettings, OrderForm, PaymentSettings, Product, UserProfile } from '../types/domain'
 
 type AppliedPromo = {
@@ -22,6 +23,8 @@ type Props = {
   profile: UserProfile | null
   cartProducts: { product: Product; quantity: number; size?: string; color?: string; cartKey: string }[]
   cartTotal: number
+  /** Idishlar uchun jami — chegirmaga tushmaydi. */
+  cartContainerTotal: number
   orderForm: OrderForm
   onUpdateForm: (field: keyof OrderForm, value: unknown) => void
   onSubmit: () => Promise<boolean>
@@ -33,7 +36,8 @@ type Props = {
 }
 
 export function CheckoutPage({
-  profile, cartProducts, cartTotal, orderForm, onUpdateForm, onSubmit, isSubmitting, onBack, onNavigate, closed,
+  profile, cartProducts, cartTotal, cartContainerTotal, orderForm, onUpdateForm, onSubmit, isSubmitting,
+  onBack, onNavigate, closed,
 }: Props) {
   const t = useT()
   const [copied, setCopied] = useState(false)
@@ -72,7 +76,13 @@ export function CheckoutPage({
     delivery === null || (delivery.freeFrom > 0 && discountedSubtotal >= delivery.freeFrom)
       ? 0
       : delivery.fee
-  const finalTotal = discountedSubtotal + deliveryFee
+  // Formula server bilan bitta joyda — `shared/pricing.ts`
+  const finalTotal = orderTotal({
+    subtotal: cartTotal,
+    discount,
+    containerFee: cartContainerTotal,
+    deliveryFee,
+  })
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -156,6 +166,11 @@ export function CheckoutPage({
                   <p className="mt-0.5 text-xs" style={{ color: 'var(--muted)' }}>
                     {quantity} × {formatPrice(product.price)}
                   </p>
+                  {!!product.containerPrice && (
+                    <p className="mt-0.5 text-[11px] font-semibold" style={{ color: 'var(--muted)' }}>
+                      {t('product.withContainer')} +{formatPrice(product.containerPrice * quantity)}
+                    </p>
+                  )}
                 </div>
                 <b className="text-sm" style={{ color: 'var(--ink)' }}>{formatPrice(product.price * quantity)}</b>
               </div>
@@ -217,6 +232,15 @@ export function CheckoutPage({
                     {t('checkout.discount')} {appliedPromo ? `(${appliedPromo.discountPercent}%)` : ''}
                   </span>
                   <span className="font-bold" style={{ color: 'var(--success)' }}>-{formatPrice(discount)}</span>
+                </div>
+              )}
+
+              {cartContainerTotal > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--muted)' }}>{t('checkout.containers')}</span>
+                  <span className="font-bold" style={{ color: 'var(--ink)' }}>
+                    {formatPrice(cartContainerTotal)}
+                  </span>
                 </div>
               )}
 
