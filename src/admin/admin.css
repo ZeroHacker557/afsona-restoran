@@ -397,6 +397,33 @@
   color: var(--ink);
 }
 
+/* «Jami» — ikkinchi darajali doska.
+   Ish doskalaridan chiziq bilan ajratilgan va xiraroq: u kundalik
+   ish uchun emas. Tanlanganda esa boshqalar bilan teng to'q bo'ladi —
+   aks holda ochiq turgan doska o'chgandek ko'rinardi. */
+.adm-board-tab.secondary {
+  margin-left: 12px;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+.adm-board-tab.secondary::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 24%;
+  bottom: 24%;
+  width: 1px;
+  background: var(--line);
+}
+
+.adm-board-tab.secondary:hover { color: var(--muted); }
+
+.adm-board-tab.secondary.active {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 /* Ko'rilmagan yangi buyurtmalar soni — ikkinchi doskada turganda ham
    ko'rinib tursin. Ovoz eshitilmasa (brauzer to'ssa) yagona belgi shu. */
 .adm-board-badge {

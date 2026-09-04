@@ -39,14 +39,15 @@ import { useNow } from '../lib/now'
 /**
  * Doskalar.
  *
- * «Jami» — hammasi aralash, umumiy ko'rinish uchun (sukut bo'yicha shu
- * ochiladi). Qolgan ikkitasi — turiga qarab ajratilgan, har birining
- * ustun nomlari o'ziga xos.
+ * Avval ish doskalari — turiga qarab ajratilgan, har birining ustun
+ * nomlari o'ziga xos. «Jami» esa oxirida, ajratib va xiraroq turadi:
+ * u kundalik ish uchun emas, umumiy holatni bir ko'z tashlab olish
+ * uchun.
  */
 const BOARDS = [
-  { id: 'all', label: 'Jami', Icon: LayoutGrid },
   { id: 'delivery', label: 'Yetkazish', Icon: Bike },
   { id: 'pickup', label: 'Olib ketish', Icon: Store },
+  { id: 'all', label: 'Jami', Icon: LayoutGrid },
 ] as const
 
 type BoardId = (typeof BOARDS)[number]['id']
@@ -236,7 +237,15 @@ export function OrdersPage() {
           {BOARDS.map(({ id, label, Icon }) => (
             <button
               key={id}
-              className={`adm-board-tab ${board === id ? 'active' : ''}`}
+              className={[
+                'adm-board-tab',
+                // «Jami» — ikkinchi darajali: ajratilgan va xiraroq.
+                // Tanlanganda esa boshqalar bilan bir xil to'q bo'ladi.
+                id === 'all' ? 'secondary' : '',
+                board === id ? 'active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               onClick={() => setBoard(id)}
             >
               <Icon size={16} />
