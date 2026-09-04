@@ -30,16 +30,26 @@ import {
   ALL_STATUSES,
   CANCEL_REASONS,
   CANCEL_STATUSES,
+  DEAD_STATUSES,
   ORDER_FLOW as FLOW,
   STATUS_STYLE,
 } from '../lib/status'
 import { useNow } from '../lib/now'
 
-/** Ikkita alohida doska — har birining o'z ustun nomlari bor. */
+/**
+ * Doskalar.
+ *
+ * «Jami» — hammasi aralash, umumiy ko'rinish uchun (sukut bo'yicha shu
+ * ochiladi). Qolgan ikkitasi — turiga qarab ajratilgan, har birining
+ * ustun nomlari o'ziga xos.
+ */
 const BOARDS = [
+  { id: 'all', label: 'Jami', Icon: LayoutGrid },
   { id: 'delivery', label: 'Yetkazish', Icon: Bike },
   { id: 'pickup', label: 'Olib ketish', Icon: Store },
 ] as const
+
+type BoardId = (typeof BOARDS)[number]['id']
 
 const PERIODS = [
   { id: 'today', label: 'Bugun' },
@@ -61,10 +71,20 @@ export function OrdersPage() {
      umuman ko'rinmaydi va hamma narsa 'delivery' da qoladi — ya'ni
      panel ilgarigidek bitta doska bo'lib ishlaydi.
   */
-  const [board, setBoard] = useState<DeliveryType>('delivery')
+  const [board, setBoard] = useState<BoardId>('all')
 
   /** Olib ketish o'chirilgan bo'lsa panel ilgarigidek bitta doska. */
   const twoBoards = delivery.pickupEnabled === true
+
+  /** Ustun va status nomlari qaysi turga qarab yozilsin. */
+  const labelType: DeliveryType = board === 'pickup' ? 'pickup' : 'delivery'
+
+  /*
+     «Olib ketish» belgisi faqat aralash ro'yxatda kerak: ajratilgan
+     doskada har bir kartochka baribir o'sha turdan bo'ladi, belgi esa
+     shovqin bo'lib qolardi.
+  */
+  const showTag = !twoBoards || board === 'all'
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<AdminOrder | null>(null)
 
@@ -149,7 +169,9 @@ export function OrdersPage() {
     return orders.filter((order) => {
       if (limit && (Date.parse(order.createdAt) || 0) < limit) return false
       if (status !== 'all' && order.status !== status) return false
-      if (twoBoards && readDeliveryType(order.deliveryType) !== board) return false
+      if (twoBoards && board !== 'all' && readDeliveryType(order.deliveryType) !== board) {
+        return false
+      }
       if (!needle) return true
       return (
         order.orderNumber.toLowerCase().includes(needle) ||
@@ -159,6 +181,24 @@ export function OrdersPage() {
       )
     })
   }, [orders, period, status, board, twoBoards, search, now])
+
+  /**
+   * «Jami» doskasidagi hisob — ko'rinib turgan buyurtmalar bo'yicha.
+   *
+   * Bekor qilinganlar summaga kirmaydi: ular pul keltirmagan, aks holda
+   * raqam kunlik tushumdan katta chiqib, adminni chalg'itardi.
+   */
+  const counts = useMemo(() => {
+    let deliveryCount = 0
+    let pickupCount = 0
+    let total = 0
+    for (const order of filtered) {
+      if (readDeliveryType(order.deliveryType) === 'pickup') pickupCount++
+      else deliveryCount++
+      if (!DEAD_STATUSES.has(order.status)) total += Number(order.total) || 0
+    }
+    return { delivery: deliveryCount, pickup: pickupCount, total }
+  }, [filtered])
 
   const fresh = new Set(freshOrderIds)
 
@@ -170,9 +210,11 @@ export function OrdersPage() {
      doska ochilganda o'chadi.
   */
   const unseen = useMemo(() => {
-    const count: Record<DeliveryType, number> = { delivery: 0, pickup: 0 }
+    const count: Record<BoardId, number> = { all: 0, delivery: 0, pickup: 0 }
     for (const order of orders) {
-      if (fresh.has(order.id)) count[readDeliveryType(order.deliveryType)]++
+      if (!fresh.has(order.id)) continue
+      count[readDeliveryType(order.deliveryType)]++
+      count.all++
     }
     return count
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,6 +244,28 @@ export function OrdersPage() {
               {unseen[id] > 0 && <span className="adm-board-badge">{unseen[id]}</span>}
             </button>
           ))}
+        </div>
+      )}
+
+      {/*
+         «Jami» doskasidagi qisqa hisob: tanlangan davrda nechta buyurtma
+         va ular qanday taqsimlangani. Aralash ro'yxatda bu raqamlar
+         bo'lmasa, admin qaysi turi ko'payib ketganini sezmaydi.
+      */}
+      {twoBoards && board === 'all' && filtered.length > 0 && (
+        <div className="adm-board-stats">
+          <span>
+            Jami <b>{filtered.length}</b> ta
+          </span>
+          <span>
+            <Bike size={13} /> Yetkazish <b>{counts.delivery}</b>
+          </span>
+          <span>
+            <Store size={13} /> Olib ketish <b>{counts.pickup}</b>
+          </span>
+          <span style={{ marginLeft: 'auto' }}>
+            Summa <b>{money(counts.total)}</b>
+          </span>
         </div>
       )}
 
@@ -266,7 +330,7 @@ export function OrdersPage() {
               className={`adm-tab ${status === item ? 'active' : ''}`}
               onClick={() => setStatus(item)}
             >
-              {statusLabel(item, board)}
+              {statusLabel(item, labelType)}
             </button>
           ))}
         </div>
@@ -316,8 +380,19 @@ export function OrdersPage() {
                   if (id) void moveTo(id, column)
                 }}
               >
-                <div className="flex items-center justify-between px-1 pb-1">
-                  <span className="text-sm font-bold">{statusLabel(column, board)}</span>
+                <div className="flex items-start justify-between gap-2 px-1 pb-1">
+                  <span className="text-sm font-bold leading-tight">
+                    {statusLabel(column, labelType)}
+                    {/*
+                       «Jami» doskasida ikkala tur aralash turadi, shuning
+                       uchun ustun ikkinchi nomini ham ko'rsatadi — masalan
+                       «Yetkazilmoqda / Tayyor». Nomlari bir xil ustunlarda
+                       (masalan «Yangi») ikkinchi qator chiqmaydi.
+                    */}
+                    {board === 'all' && statusLabel(column, 'pickup') !== column && (
+                      <span className="adm-column-alt">{statusLabel(column, 'pickup')}</span>
+                    )}
+                  </span>
                   <span className="text-xs font-bold" style={{ color: 'var(--muted)' }}>
                     {items.length}
                   </span>
@@ -362,7 +437,7 @@ export function OrdersPage() {
                     <div className="truncate text-xs" style={{ color: 'var(--muted)' }}>
                       {order.products.length} ta taom · {order.customer?.phone || ''}
                     </div>
-                    {!twoBoards && order.deliveryType === 'pickup' && <PickupTag />}
+                    {showTag && order.deliveryType === 'pickup' && <PickupTag />}
                     <div className="mt-2 flex items-center justify-between">
                       <span className="font-bold">{money(order.total)}</span>
                       <span
@@ -415,7 +490,7 @@ export function OrdersPage() {
                       <div className="text-xs" style={{ color: 'var(--muted)' }}>
                         {order.customer?.phone}
                       </div>
-                      {!twoBoards && order.deliveryType === 'pickup' && <PickupTag />}
+                      {showTag && order.deliveryType === 'pickup' && <PickupTag />}
                     </td>
                     <td style={{ color: 'var(--muted)' }}>{order.products.length} ta</td>
                     <td className="font-bold">{money(order.total)}</td>
