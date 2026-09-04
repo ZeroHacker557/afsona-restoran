@@ -39,7 +39,8 @@ export type AdminData = {
   }
   /** Sahifa ochilgandan keyin kelgan yangi buyurtmalar (belgilash uchun). */
   freshOrderIds: string[]
-  markOrdersSeen: () => void
+  /** ids berilsa faqat o'shalar o'chiriladi, aks holda hammasi. */
+  markOrdersSeen: (ids?: string[]) => void
   /** Jonli ro'yxatga nechta buyurtma olinyapti. */
   ordersLimit: number
   /** Chegaraga yetildimi — «Ko'proq yuklash» tugmasini shu hal qiladi. */

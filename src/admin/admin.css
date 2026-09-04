@@ -366,6 +366,62 @@
   color: var(--surface);
 }
 
+/* ── Ikkita doska: Yetkazish / Olib ketish ───────────────────
+   Oddiy filtr emas, aynan DOSKA tanlash — shuning uchun ko'rinishi
+   ham boshqacha: kattaroq, pastida faol chiziq bilan. Admin qaysi
+   doskada turganini bir qarashda ko'radi.                        */
+.adm-boards {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.adm-board-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.adm-board-tab:hover { color: var(--ink-2); }
+
+.adm-board-tab.active {
+  border-bottom-color: var(--brand);
+  color: var(--ink);
+}
+
+/* Ko'rilmagan yangi buyurtmalar soni — ikkinchi doskada turganda ham
+   ko'rinib tursin. Ovoz eshitilmasa (brauzer to'ssa) yagona belgi shu. */
+.adm-board-badge {
+  display: inline-grid;
+  min-width: 19px;
+  height: 19px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--brand);
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  animation: admBadgePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes admBadgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-board-badge { animation: none; }
+}
+
 /* ── Modal ─────────────────────────────────────────────────── */
 
 .adm-overlay {

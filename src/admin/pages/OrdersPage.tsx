@@ -23,7 +23,7 @@ import { Modal } from '../components/Modal'
 import { Chip, ConfirmBar, Empty, RowsSkeleton, Spinner } from '../components/ui'
 import { toast, toastError } from '../lib/toast'
 import { formatDateTime, money, timeAgo } from '../lib/format'
-import { statusLabel } from '../../utils/delivery'
+import { readDeliveryType, statusLabel, type DeliveryType } from '../../utils/delivery'
 import { buildReceiptHtml } from '../lib/receipt'
 import type { AdminOrder } from '../lib/db'
 import {
@@ -35,11 +35,10 @@ import {
 } from '../lib/status'
 import { useNow } from '../lib/now'
 
-/** Olish usuli bo'yicha filtr. */
-const WAYS = [
-  { id: 'all', label: 'Barchasi' },
-  { id: 'delivery', label: 'Yetkazish' },
-  { id: 'pickup', label: 'Olib ketish' },
+/** Ikkita alohida doska — har birining o'z ustun nomlari bor. */
+const BOARDS = [
+  { id: 'delivery', label: 'Yetkazish', Icon: Bike },
+  { id: 'pickup', label: 'Olib ketish', Icon: Store },
 ] as const
 
 const PERIODS = [
@@ -57,7 +56,15 @@ export function OrdersPage() {
   const [view, setView] = useState<'board' | 'list'>('board')
   const [period, setPeriod] = useState<Period>('today')
   const [status, setStatus] = useState<string>('all')
-  const [way, setWay] = useState<'all' | 'delivery' | 'pickup'>('all')
+  /*
+     Qaysi doska ochiq. Olib ketish o'chirilgan bo'lsa doska tanlash
+     umuman ko'rinmaydi va hamma narsa 'delivery' da qoladi — ya'ni
+     panel ilgarigidek bitta doska bo'lib ishlaydi.
+  */
+  const [board, setBoard] = useState<DeliveryType>('delivery')
+
+  /** Olib ketish o'chirilgan bo'lsa panel ilgarigidek bitta doska. */
+  const twoBoards = delivery.pickupEnabled === true
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<AdminOrder | null>(null)
 
@@ -142,7 +149,7 @@ export function OrdersPage() {
     return orders.filter((order) => {
       if (limit && (Date.parse(order.createdAt) || 0) < limit) return false
       if (status !== 'all' && order.status !== status) return false
-      if (way !== 'all' && (order.deliveryType || 'delivery') !== way) return false
+      if (twoBoards && readDeliveryType(order.deliveryType) !== board) return false
       if (!needle) return true
       return (
         order.orderNumber.toLowerCase().includes(needle) ||
@@ -151,13 +158,53 @@ export function OrdersPage() {
         (order.customer?.address || '').toLowerCase().includes(needle)
       )
     })
-  }, [orders, period, status, way, search, now])
+  }, [orders, period, status, board, twoBoards, search, now])
 
-  // Panel ochilgach yangi buyurtma belgisini o'chiramiz
   const fresh = new Set(freshOrderIds)
+
+  /*
+     Har bir doskadagi O'QILMAGAN buyurtmalar soni.
+
+     Admin bitta doskaga qarab turadi — ikkinchisiga tushgan buyurtma
+     yo'qolib ketmasligi uchun tugmada raqam turadi va u faqat o'sha
+     doska ochilganda o'chadi.
+  */
+  const unseen = useMemo(() => {
+    const count: Record<DeliveryType, number> = { delivery: 0, pickup: 0 }
+    for (const order of orders) {
+      if (fresh.has(order.id)) count[readDeliveryType(order.deliveryType)]++
+    }
+    return count
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, freshOrderIds])
 
   return (
     <>
+      {/*
+         Ikkita alohida doska. Har birining ustun nomlari o'ziga xos:
+         yetkazishda «Yetkazilmoqda», olib ketishda «Tayyor» — shuning
+         uchun ular bitta doskada aralashmaydi.
+
+         Tugmadagi raqam — o'sha doskadagi ko'rilmagan yangi buyurtmalar
+         soni. Admin ikkinchi doskada turgan bo'lsa ham buyurtma
+         yo'qolmaydi: ovoz chalinadi, xabar chiqadi va raqam qoladi.
+      */}
+      {twoBoards && (
+        <div className="adm-boards">
+          {BOARDS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              className={`adm-board-tab ${board === id ? 'active' : ''}`}
+              onClick={() => setBoard(id)}
+            >
+              <Icon size={16} />
+              {label}
+              {unseen[id] > 0 && <span className="adm-board-badge">{unseen[id]}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
           <Search
@@ -183,20 +230,7 @@ export function OrdersPage() {
           </button>
         ))}
 
-        {/* Olish usuli — faqat olib ketish yoqilgan bo'lsa ko'rinadi */}
-        {delivery.pickupEnabled === true && (
-          <div className="flex gap-1">
-            {WAYS.map((item) => (
-              <button
-                key={item.id}
-                className={`adm-tab ${way === item.id ? 'active' : ''}`}
-                onClick={() => setWay(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        )}
+
 
         <div className="flex gap-1 rounded-[var(--r-sm)] p-1" style={{ background: 'var(--surface-3)' }}>
           <button
@@ -232,7 +266,7 @@ export function OrdersPage() {
               className={`adm-tab ${status === item ? 'active' : ''}`}
               onClick={() => setStatus(item)}
             >
-              {item}
+              {statusLabel(item, board)}
             </button>
           ))}
         </div>
@@ -283,7 +317,7 @@ export function OrdersPage() {
                 }}
               >
                 <div className="flex items-center justify-between px-1 pb-1">
-                  <span className="text-sm font-bold">{column}</span>
+                  <span className="text-sm font-bold">{statusLabel(column, board)}</span>
                   <span className="text-xs font-bold" style={{ color: 'var(--muted)' }}>
                     {items.length}
                   </span>
@@ -312,7 +346,8 @@ export function OrdersPage() {
                     }}
                     onClick={() => {
                       setSelected(order)
-                      markOrdersSeen()
+                      // Faqat shu doskadagilar ko'rilgan deb belgilanadi
+                      markOrdersSeen(filtered.map((item) => item.id))
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -327,7 +362,7 @@ export function OrdersPage() {
                     <div className="truncate text-xs" style={{ color: 'var(--muted)' }}>
                       {order.products.length} ta taom · {order.customer?.phone || ''}
                     </div>
-                    {order.deliveryType === 'pickup' && <PickupTag />}
+                    {!twoBoards && order.deliveryType === 'pickup' && <PickupTag />}
                     <div className="mt-2 flex items-center justify-between">
                       <span className="font-bold">{money(order.total)}</span>
                       <span
@@ -380,7 +415,7 @@ export function OrdersPage() {
                       <div className="text-xs" style={{ color: 'var(--muted)' }}>
                         {order.customer?.phone}
                       </div>
-                      {order.deliveryType === 'pickup' && <PickupTag />}
+                      {!twoBoards && order.deliveryType === 'pickup' && <PickupTag />}
                     </td>
                     <td style={{ color: 'var(--muted)' }}>{order.products.length} ta</td>
                     <td className="font-bold">{money(order.total)}</td>

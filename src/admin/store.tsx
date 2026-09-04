@@ -21,6 +21,7 @@ import {
   type PaymentSettings,
 } from './lib/db'
 import { DEFAULT_HOURS, type WorkingHours } from '../utils/hours'
+import { readDeliveryType, type DeliveryType } from '../utils/delivery'
 import { DataContext, type AdminData } from './lib/data-context'
 import { toast } from './lib/toast'
 
@@ -33,7 +34,17 @@ import { toast } from './lib/toast'
  */
 
 /** Yangi buyurtma signali — brauzerda sintezlangan "ding". */
-function playChime() {
+/**
+ * Yangi buyurtma ovozi.
+ *
+ * Ikkala doska uchun ohang ATAYLAB har xil: admin bitta doskaga qarab
+ * turganda ikkinchisiga buyurtma tushsa, ekranga qaramasdan ham qaysi
+ * turdaligini eshitib biladi.
+ *
+ *   yetkazish  — ikkita ko'tariluvchi nota (ilgarigidek)
+ *   olib ketish — uchta past nota, boshqacha ritm
+ */
+function playChime(kind: DeliveryType = 'delivery') {
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     const context = new Ctx()
@@ -49,9 +60,15 @@ function playChime() {
       oscillator.start(context.currentTime + start)
       oscillator.stop(context.currentTime + start + 0.45)
     }
-    play(880, 0)
-    play(1320, 0.16)
-    setTimeout(() => context.close(), 1200)
+    if (kind === 'pickup') {
+      play(660, 0)
+      play(660, 0.14)
+      play(990, 0.30)
+    } else {
+      play(880, 0)
+      play(1320, 0.16)
+    }
+    setTimeout(() => context.close(), 1400)
   } catch {
     /* Ovoz muhim emas — brauzer ruxsat bermasa jim o'tamiz */
   }
@@ -140,13 +157,32 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
           if (incoming.length) {
             incoming.forEach((order) => knownOrders.current!.add(order.id))
             setFreshOrderIds((previous) => [...new Set([...previous, ...incoming.map((o) => o.id)])])
-            playChime()
-            notifyDesktop(incoming.length)
-            toast(
-              incoming.length === 1
-                ? `Yangi buyurtma ${incoming[0].orderNumber}`
-                : `${incoming.length} ta yangi buyurtma`,
-            )
+
+            /*
+               Ikki doska bor — xabar qaysi biriga tushganini aytishi
+               shart. Aks holda admin yetkazish doskasida turib, olib
+               ketishga tushgan buyurtmani sezmay qoladi.
+
+               Ikkala turdan bir vaqtda kelsa, har biri uchun alohida
+               ovoz va xabar beriladi.
+            */
+            const byKind: Record<DeliveryType, typeof incoming> = { delivery: [], pickup: [] }
+            for (const order of incoming) {
+              byKind[readDeliveryType(order.deliveryType)].push(order)
+            }
+
+            for (const kind of ['pickup', 'delivery'] as const) {
+              const list = byKind[kind]
+              if (!list.length) continue
+              const where = kind === 'pickup' ? '🏪 Olib ketish' : '🛵 Yetkazish'
+              playChime(kind)
+              notifyDesktop(list.length, kind)
+              toast(
+                list.length === 1
+                  ? `${where} — yangi buyurtma ${list[0].orderNumber}`
+                  : `${where} — ${list.length} ta yangi buyurtma`,
+              )
+            }
           }
           items.forEach((order) => knownOrders.current!.add(order.id))
         }
@@ -171,7 +207,15 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
       loaded,
       loading: !loaded.products || !loaded.orders,
       freshOrderIds,
-      markOrdersSeen: () => setFreshOrderIds([]),
+      /*
+         Faqat ko'rilgan doskaning belgisini o'chiramiz. Ilgari hammasi
+         tozalanardi — natijada yetkazish doskasini ochgan admin olib
+         ketishdagi o'qilmagan buyurtma belgisini bilmasdan yo'qotardi.
+      */
+      markOrdersSeen: (ids?: string[]) =>
+        setFreshOrderIds((previous) =>
+          ids ? previous.filter((id) => !ids.includes(id)) : [],
+        ),
       ordersLimit,
       // Ro'yxat to'lib turgan bo'lsa — demak eskiroqlari ham bor
       ordersAtLimit: orders.length >= ordersLimit,
@@ -187,12 +231,14 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
 }
 
 /** Brauzer bildirishnomasi — panel boshqa oynada ochiq bo'lsa ham ko'rinadi. */
-function notifyDesktop(count: number) {
+function notifyDesktop(count: number, kind: DeliveryType) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+  const where = kind === 'pickup' ? 'Olib ketish' : 'Yetkazish'
   try {
-    new Notification('🆕 Yangi buyurtma', {
-      body: count === 1 ? 'Yangi buyurtma tushdi' : `${count} ta yangi buyurtma tushdi`,
-      tag: 'afsona-order',
+    new Notification(kind === 'pickup' ? '🏪 Olib ketish — yangi buyurtma' : '🛵 Yangi buyurtma', {
+      body: count === 1 ? `${where} doskasiga buyurtma tushdi` : `${where}: ${count} ta yangi buyurtma`,
+      // Har bir doska o'z xabarini almashtiradi, bir-birini bosmaydi
+      tag: `afsona-order-${kind}`,
     })
   } catch {
     /* ba'zi brauzerlar konstruktorni taqiqlaydi */
