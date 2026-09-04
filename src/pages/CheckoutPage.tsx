@@ -168,7 +168,10 @@ export function CheckoutPage({
                   </p>
                   {!!product.containerPrice && (
                     <p className="mt-0.5 text-[11px] font-semibold" style={{ color: 'var(--muted)' }}>
-                      {t('product.withContainer')} +{formatPrice(product.containerPrice * quantity)}
+                      {t('product.withContainer')}{' '}
+                      <span className="whitespace-nowrap">
+                        +{formatPrice(product.containerPrice * quantity)}
+                      </span>
                     </p>
                   )}
                 </div>

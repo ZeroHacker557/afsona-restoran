@@ -82,7 +82,8 @@ export function ProductCard({ product, onOpen, onAddToCart, likedIds, onToggleLi
           )}
           {!!product.containerPrice && (
             <p className="product-card-container">
-              {t('product.withContainer')} +{formatPrice(product.containerPrice)}
+              <span>{t('product.withContainer')}</span>
+              <span className="nowrap">+{formatPrice(product.containerPrice)}</span>
             </p>
           )}
         </div>

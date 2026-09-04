@@ -100,7 +100,10 @@ export function CartDrawer({
                     </p>
                     {!!product.containerPrice && (
                       <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                        {t('product.withContainer')} +{formatPrice(product.containerPrice)}
+                        {t('product.withContainer')}{' '}
+                        <span className="whitespace-nowrap">
+                          +{formatPrice(product.containerPrice)}
+                        </span>
                       </p>
                     )}
 

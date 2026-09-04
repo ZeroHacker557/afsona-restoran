@@ -550,16 +550,29 @@ a { color: inherit; text-decoration: none; }
 }
 
 /*
-   "Idish bilan +3 000 so'm" — narx tagidagi kichik yozuv.
-   Ataylab jimgina: bu qo'shimcha ma'lumot, taomning o'z narxi bilan
-   raqobatlashmasligi kerak. Uzun bo'lsa ikkinchi satrga tushadi.
+   "Idish bilan / +3 000 so'm" — narx tagidagi kichik yozuv.
+
+   Ataylab ikki qator: yorlig'i tepada, narxi tagida. Bitta qatorga
+   siqilsa, tor kartochkada raqamning o'rtasidan bo'linib ketardi
+   ("+10" tepada, "000 so'm" tagida) — shuning uchun narx `nowrap`.
+
+   Rangi jimgina: bu qo'shimcha ma'lumot, taomning o'z narxi bilan
+   raqobatlashmasligi kerak.
 */
 .product-card-container {
   margin: 3px 0 0;
   font-size: 0.66rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.3;
   color: var(--muted);
+}
+
+.product-card-container > span {
+  display: block;
+}
+
+.product-card-container .nowrap {
+  white-space: nowrap;
 }
 
 /* ====== Buttons ====== */

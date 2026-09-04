@@ -183,7 +183,10 @@ export function ProductDetailPage({
             style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}
           >
             <Package size={16} />
-            {t('product.containerNote', { price: formatPrice(product.containerPrice) })}
+            {/* Bo'linmas probel — "+3 000 so'm" jumla oxirida ikkiga ajralib qolmasin */}
+            {t('product.containerNote', {
+              price: formatPrice(product.containerPrice).replace(/ /g, ' '),
+            })}
           </p>
         )}
 
